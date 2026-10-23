@@ -169,7 +169,9 @@ fn build_args(pipeline: &VideoPipeline, cfg: &Config, buffer_dir: &Path) -> (Vec
     }
 
     // Áudio (entradas 1..)
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut audio_inputs = 0;
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut uses_stdin = false;
     #[cfg(windows)]
     if cfg.system_audio || cfg.mic {

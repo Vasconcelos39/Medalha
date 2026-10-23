@@ -239,7 +239,7 @@ impl Recorder {
             #[cfg(target_os = "linux")]
             Backend::Gsr(cmd) => {
                 let app = app.clone();
-                let on_saved: gsr::OnSaved = std::sync::Arc::new(move |tmp| {
+                let on_saved: gsr::OnSaved = std::sync::Arc::new(move |tmp: std::path::PathBuf| {
                     let state = app.state::<AppState>();
                     let dir = state.config.lock().unwrap().clips_dir.clone();
                     let _ = std::fs::create_dir_all(&dir);
