@@ -3,8 +3,11 @@
 Cliente desktop **não oficial** do [Medal](https://medal.tv) para **Linux e Windows**, escrito em Rust ([Tauri 2](https://tauri.app)).
 
 - **Aba Medal**: o medal.tv embutido, com login persistente (feed, perfil, clipes na nuvem).
-- **Aba Clipes**: biblioteca dos seus clipes locais, com miniaturas, player, renomear, mostrar na pasta e lixeira.
+- **Aba Clipes**: biblioteca dos seus clipes locais, com miniaturas, player, filtro por jogo, renomear, mostrar na pasta e lixeira.
 - **Replay buffer**: grava em segundo plano e, ao apertar o atalho (padrão `F8`), salva os últimos N segundos. Funciona no **Windows**, no **X11** e no **Wayland**.
+- **Cortar clipes**: no player, marque o início e o fim (arrastando as alças ou com `I` / `O`) e salve o trecho como um clipe novo, sem reencodar.
+- **Nome do jogo**: o clipe é salvo com o nome da janela em foco, ex. `Elden Ring_2026-10-23_21-00-00.mp4`.
+- **Iniciar com o sistema** (minimizado na bandeja) e **som ao salvar**, nas configurações.
 
 > O Medalha não é afiliado ao Medal.tv. O Medal não oferece API pública de upload, e o site não aceita envio de vídeos pelo navegador. Por isso o upload automático para a nuvem do Medal não é possível hoje: os clipes ficam na sua pasta local (padrão `Vídeos/Medalha`).
 
@@ -24,7 +27,27 @@ Com o ffmpeg, o buffer é uma sequência de segmentos de 2 s reaproveitados em c
 
 ## Instalação
 
-Baixe o instalador em [Releases](https://github.com/Vasconcelos39/medalha/releases), ou o artefato da última build em [Actions](https://github.com/Vasconcelos39/medalha/actions).
+Baixe o instalador da última versão em [Releases](https://github.com/Vasconcelos39/medalha/releases/latest):
+
+| Sistema | Arquivo |
+| --- | --- |
+| Windows 10/11 | `Medalha_X.Y.Z_x64-setup.exe` |
+| Debian, Ubuntu, Mint, Pop!_OS | `Medalha_X.Y.Z_amd64.deb` (`sudo apt install ./Medalha_*.deb`) |
+| Fedora, openSUSE | `Medalha-X.Y.Z-1.x86_64.rpm` (no Fedora o `ffmpeg` vem do [RPM Fusion](https://rpmfusion.org)) |
+| Qualquer distro | `Medalha_X.Y.Z_amd64.AppImage` (`chmod +x` e rode) |
+
+Builds de cada commit ficam em [Actions](https://github.com/Vasconcelos39/medalha/actions).
+
+### Publicar uma versão
+
+Atualize a versão em `src-tauri/Cargo.toml` e `src-tauri/tauri.conf.json`, escreva a seção `## vX.Y.Z` no `CHANGELOG.md` e envie uma tag:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+O GitHub Actions compila no Windows e no Linux e publica a release com os instaladores e as notas do CHANGELOG.
 
 ### Dependências
 
@@ -47,6 +70,16 @@ flatpak install flathub com.dec05eba.gpu_screen_recorder
 ```
 
 `gstreamer1.0-libav` é necessário para o player embutido tocar H.264 no WebKitGTK.
+
+## Nome do jogo
+
+Ao salvar, o Medalha lê o título da janela em foco:
+
+- **Windows**: qualquer jogo.
+- **Linux X11**, **Hyprland** e **Sway**: qualquer jogo (usa `xprop`, `hyprctl` ou `swaymsg`).
+- **GNOME/KDE no Wayland**: só jogos que rodam via XWayland, que são a maioria (Proton/Wine e boa parte dos nativos). Os outros ficam com o nome `Medalha_…`.
+
+Navegadores, Discord e Steam viram só o nome do app. Dá para desligar em *Configurações → Nomear clipes com o jogo em foco*.
 
 ## Atalho no Wayland
 
@@ -87,7 +120,10 @@ A interface é HTML/CSS/JS puro em `ui/` (sem npm nem bundler).
 src-tauri/src/
   main.rs            janela, abas, bandeja, atalhos, comandos da UI, CLI
   medal.rs           webview do medal.tv
-  clips.rs           biblioteca local (miniaturas, renomear, lixeira, watcher)
+  clips.rs           biblioteca local (miniaturas, corte, renomear, lixeira, watcher)
+  game.rs            nome da janela em foco (Windows, X11, Hyprland, Sway)
+  autostart.rs       iniciar com o sistema (registro Run / ~/.config/autostart)
+  sound.rs           som de confirmação ao salvar
   media.rs           descoberta do ffmpeg e escolha de captura/encoder
   config.rs          configurações (JSON na pasta de config do sistema)
   recorder/

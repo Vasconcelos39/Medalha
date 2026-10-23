@@ -79,10 +79,17 @@ pub fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Option<Output> {
     })
 }
 
-pub fn clip_file_name() -> String {
-    chrono::Local::now()
-        .format("Medalha_%Y-%m-%d_%H-%M-%S.mp4")
-        .to_string()
+/// `Jogo_2026-10-23_21-00-00.mp4` (ou `Medalha_…` sem jogo). A UI agrupa por esse prefixo.
+pub fn clip_file_name(game: Option<&str>) -> String {
+    let prefix = game.filter(|g| !g.is_empty()).unwrap_or("Medalha");
+    format!("{prefix}_{}.mp4", chrono::Local::now().format("%Y-%m-%d_%H-%M-%S"))
+}
+
+/// String UTF-16 terminada em zero, para a API do Windows.
+#[cfg(windows)]
+pub fn wide(s: impl AsRef<OsStr>) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    s.as_ref().encode_wide().chain(std::iter::once(0)).collect()
 }
 
 /// `dir/name`, ou `dir/name (2)` etc. se já existir.

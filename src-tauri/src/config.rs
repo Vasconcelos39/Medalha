@@ -23,6 +23,11 @@ pub struct Config {
     pub start_on_launch: bool,
     pub close_to_tray: bool,
     pub notify_on_save: bool,
+    pub sound_on_save: bool,
+    /// Prefixo do arquivo com o nome da janela em foco (o jogo) ao salvar.
+    pub game_in_name: bool,
+    /// Abrir minimizado na bandeja quando o usuário entra no sistema.
+    pub autostart: bool,
     /// Caminho manual do ffmpeg (vazio = procurar sozinho).
     pub ffmpeg_path: String,
     /// gpu-screen-recorder: "auto" | "screen" | "portal" | "focused"
@@ -46,6 +51,9 @@ impl Default for Config {
             start_on_launch: true,
             close_to_tray: true,
             notify_on_save: true,
+            sound_on_save: true,
+            game_in_name: true,
+            autostart: false,
             ffmpeg_path: String::new(),
             gsr_capture: "auto".into(),
         }

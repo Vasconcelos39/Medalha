@@ -1,10 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autostart;
 mod clips;
 mod config;
+mod game;
 mod media;
 mod medal;
 mod recorder;
+mod sound;
 mod util;
 
 use config::Config;
@@ -62,7 +65,11 @@ fn set_config(app: AppHandle, mut config: Config) -> CmdResult<Config> {
         return Err("Escolha uma pasta de clipes.".into());
     }
     let st = state(&app);
-    let old = std::mem::replace(&mut *st.config.lock().unwrap(), config.clone());
+    let old = st.config.lock().unwrap().clone();
+    if old.autostart != config.autostart {
+        autostart::set(config.autostart)?;
+    }
+    *st.config.lock().unwrap() = config.clone();
     config.save(&st.config_path)?;
     if old.hotkey != config.hotkey {
         register_hotkey(&app, &config.hotkey);
@@ -121,6 +128,17 @@ fn clip_path(app: &AppHandle, path: &str) -> CmdResult<PathBuf> {
 async fn delete_clip(app: AppHandle, path: String) -> CmdResult<()> {
     let path = clip_path(&app, &path)?;
     blocking(move || clips::trash(&path)).await?
+}
+
+#[tauri::command]
+async fn trim_clip(app: AppHandle, path: String, start: f64, end: f64) -> CmdResult<clips::ClipInfo> {
+    let path = clip_path(&app, &path)?;
+    let ffmpeg_path = state(&app).config.lock().unwrap().ffmpeg_path.clone();
+    blocking(move || {
+        let ffmpeg = media::find_ffmpeg(&ffmpeg_path).ok_or("ffmpeg não encontrado.")?;
+        clips::trim(&ffmpeg, &path, start, end)
+    })
+    .await?
 }
 
 #[tauri::command]
@@ -358,6 +376,7 @@ fn main() {
             list_clips,
             clip_meta,
             delete_clip,
+            trim_clip,
             rename_clip,
             reveal_clip,
             open_clip,
@@ -379,6 +398,12 @@ fn main() {
             let _ = std::fs::create_dir_all(cache_dir.join("thumbs"));
             let _ = app.asset_protocol_scope().allow_directory(cache_dir.join("thumbs"), true);
             let start_now = config.start_on_launch;
+            if config.autostart {
+                // Reescreve o caminho do executável (mudou se o app foi reinstalado ou o AppImage movido).
+                std::thread::spawn(|| {
+                    let _ = autostart::set(true);
+                });
+            }
             let hotkey = config.hotkey.clone();
             let clips_dir = config.clips_dir.clone();
             app.manage(AppState {

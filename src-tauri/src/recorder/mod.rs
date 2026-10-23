@@ -7,7 +7,7 @@ mod ffmpeg;
 pub mod gsr;
 
 use crate::config::Config;
-use crate::{clips, media, util, AppState};
+use crate::{clips, game, media, util, AppState};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -104,10 +104,19 @@ struct Inner {
 pub struct Recorder {
     inner: Mutex<Inner>,
     saving: AtomicBool,
+    /// Jogo em foco quando o usuário pediu o replay; o gsr só avisa depois que salvou.
+    #[cfg(target_os = "linux")]
+    pending_game: Mutex<Option<String>>,
 }
 
 pub fn emit_error(app: &AppHandle, message: impl Into<String>) {
     let _ = app.emit("clip-error", message.into());
+}
+
+/// Nome do jogo para o arquivo, se a opção estiver ligada.
+fn focused_game(app: &AppHandle) -> Option<String> {
+    let enabled = app.state::<AppState>().config.lock().unwrap().game_in_name;
+    enabled.then(game::focused).flatten()
 }
 
 impl Recorder {
@@ -128,6 +137,8 @@ impl Recorder {
                 pipeline: None,
             }),
             saving: AtomicBool::new(false),
+            #[cfg(target_os = "linux")]
+            pending_game: Mutex::new(None),
         }
     }
 
@@ -243,7 +254,8 @@ impl Recorder {
                     let state = app.state::<AppState>();
                     let dir = state.config.lock().unwrap().clips_dir.clone();
                     let _ = std::fs::create_dir_all(&dir);
-                    let dest = util::unique_path(&dir, &util::clip_file_name());
+                    let game = state.recorder.pending_game.lock().unwrap().take();
+                    let dest = util::unique_path(&dir, &util::clip_file_name(game.as_deref()));
                     match util::move_file(&tmp, &dest) {
                         Ok(()) => clips::on_clip_saved(&app, dest),
                         Err(e) => emit_error(&app, format!("Não consegui mover o clipe: {e}")),
@@ -332,11 +344,12 @@ impl Recorder {
                 let _ = app.emit("clip-saving", ());
                 let app = app.clone();
                 std::thread::spawn(move || {
+                    let game = focused_game(&app);
                     let state = app.state::<AppState>();
                     let cfg = state.config.lock().unwrap().clone();
                     let result = std::fs::create_dir_all(&cfg.clips_dir)
                         .map_err(|e| e.to_string())
-                        .map(|()| util::unique_path(&cfg.clips_dir, &util::clip_file_name()))
+                        .map(|()| util::unique_path(&cfg.clips_dir, &util::clip_file_name(game.as_deref())))
                         .and_then(|out| saver.save(&out, cfg.buffer_secs).map(|()| out));
                     state.recorder.saving.store(false, Ordering::SeqCst);
                     match result {
@@ -347,6 +360,7 @@ impl Recorder {
             }
             #[cfg(target_os = "linux")]
             Some(Session::Gsr(s)) => {
+                *self.pending_game.lock().unwrap() = focused_game(app);
                 let result = s.save();
                 drop(inner);
                 match result {

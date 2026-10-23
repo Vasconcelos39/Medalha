@@ -1,7 +1,7 @@
 //! Biblioteca local de clipes: listagem, miniaturas, renomear, lixeira.
 
-use crate::util::command;
-use crate::{media, AppState};
+use crate::util::{command, run_with_timeout, unique_path};
+use crate::{media, sound, AppState};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -84,7 +84,7 @@ pub fn meta(ffmpeg: Option<&Path>, cache_dir: &Path, clip: &Path) -> ClipMeta {
             .arg(clip)
             .args(["-frames:v", "1", "-vf", "scale=480:-2", "-q:v", "4"])
             .arg(&thumb);
-        let Some(out) = crate::util::run_with_timeout(cmd, Duration::from_secs(20)) else { break };
+        let Some(out) = run_with_timeout(cmd, Duration::from_secs(20)) else { break };
         duration = duration.or_else(|| media::parse_duration(&String::from_utf8_lossy(&out.stderr)));
         if thumb.is_file() {
             break;
@@ -100,12 +100,13 @@ pub fn meta(ffmpeg: Option<&Path>, cache_dir: &Path, clip: &Path) -> ClipMeta {
     meta
 }
 
-/// Garante que `path` está dentro da pasta de clipes.
+/// Garante que `path` está dentro da pasta de clipes. Devolve o caminho como veio:
+/// no Windows o canônico tem o prefixo `\\?\`, que o Explorer não entende.
 pub fn ensure_inside(dir: &Path, path: &str) -> Result<PathBuf, String> {
     let dir = dir.canonicalize().map_err(|e| e.to_string())?;
-    let path = Path::new(path).canonicalize().map_err(|e| e.to_string())?;
-    if path.starts_with(&dir) && is_video(&path) {
-        Ok(path)
+    let canonical = Path::new(path).canonicalize().map_err(|e| e.to_string())?;
+    if canonical.starts_with(&dir) && is_video(&canonical) && Path::new(path).is_absolute() {
+        Ok(PathBuf::from(path))
     } else {
         Err("Arquivo fora da pasta de clipes.".into())
     }
@@ -131,6 +132,39 @@ pub fn rename(path: &Path, new_name: &str) -> Result<PathBuf, String> {
     }
     std::fs::rename(path, &target).map_err(|e| e.to_string())?;
     Ok(target)
+}
+
+/// Corta `[start, end]` (segundos) num clipe novo ao lado do original, sem reencodar.
+/// Com `-c copy` o corte começa no keyframe anterior a `start` (o buffer do ffmpeg
+/// grava um por segundo).
+pub fn trim(ffmpeg: &Path, clip: &Path, start: f64, end: f64) -> Result<ClipInfo, String> {
+    if !start.is_finite() || !end.is_finite() || start < 0.0 || end - start < 0.5 {
+        return Err("Escolha um trecho de pelo menos meio segundo.".into());
+    }
+    let dir = clip.parent().ok_or("Caminho inválido.")?;
+    let stem = clip.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let ext = clip.extension().and_then(|e| e.to_str()).unwrap_or("mp4").to_ascii_lowercase();
+    let out = unique_path(dir, &format!("{stem} (corte).{ext}"));
+
+    let mut cmd = command(ffmpeg);
+    cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-ss"])
+        .arg(format!("{start:.3}"))
+        .arg("-i")
+        .arg(clip)
+        .arg("-t")
+        .arg(format!("{:.3}", end - start))
+        .args(["-map", "0", "-c", "copy", "-avoid_negative_ts", "make_zero"]);
+    if ext == "mp4" || ext == "mov" {
+        cmd.args(["-movflags", "+faststart"]);
+    }
+    cmd.arg(&out);
+    let output = run_with_timeout(cmd, Duration::from_secs(120)).ok_or("O ffmpeg demorou demais para cortar o clipe.")?;
+    if output.status.success() && out.metadata().map(|m| m.len() > 0).unwrap_or(false) {
+        info(&out).ok_or_else(|| "O corte foi salvo, mas não consegui lê-lo.".into())
+    } else {
+        let _ = std::fs::remove_file(&out);
+        Err(format!("Falha ao cortar: {}", String::from_utf8_lossy(&output.stderr).trim()))
+    }
 }
 
 pub fn trash(path: &Path) -> Result<(), String> {
@@ -188,13 +222,16 @@ fn percent_encode(s: &str) -> String {
         .collect()
 }
 
-/// Depois de salvar: gera a miniatura, avisa a UI e mostra notificação.
+/// Depois de salvar: toca o som, gera a miniatura, avisa a UI e mostra notificação.
 pub fn on_clip_saved(app: &AppHandle, path: PathBuf) {
     let state = app.state::<AppState>();
-    let (ffmpeg_path, notify) = {
+    let (ffmpeg_path, notify, beep) = {
         let cfg = state.config.lock().unwrap();
-        (cfg.ffmpeg_path.clone(), cfg.notify_on_save)
+        (cfg.ffmpeg_path.clone(), cfg.notify_on_save, cfg.sound_on_save)
     };
+    if beep {
+        sound::play_saved(&state.cache_dir);
+    }
     let ffmpeg = media::find_ffmpeg(&ffmpeg_path);
     meta(ffmpeg.as_deref(), &state.cache_dir, &path);
     let Some(clip) = info(&path) else { return };

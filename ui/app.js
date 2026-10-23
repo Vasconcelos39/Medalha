@@ -13,6 +13,7 @@ const state = {
   status: null,
   config: null,
   filter: '',
+  game: '',
 };
 
 // ---------- utilidades ----------
@@ -56,7 +57,11 @@ const dateFmt = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle
 
 function toast(message, kind = '') {
   const t = el('div', { class: `toast ${kind}` }, message);
-  $('#toasts').append(t);
+  // Um <dialog> modal fica numa camada acima de tudo; o aviso vai junto para não sumir atrás dele.
+  const box = $('#toasts');
+  const host = [...document.querySelectorAll('dialog[open]')].pop() ?? document.body;
+  if (box.parentElement !== host) host.append(box);
+  box.append(t);
   setTimeout(() => t.remove(), kind === 'error' ? 7000 : 3500);
 }
 
@@ -161,6 +166,28 @@ $('#save-btn').addEventListener('click', () => invoke('save_clip'));
 
 // ---------- clipes ----------
 
+/** `Jogo_2026-10-23_21-00-00` → `Jogo` (o Rust põe o jogo em foco no nome ao salvar). */
+const GAME_RE = /^(.+?)_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}/;
+
+function gameOf(name) {
+  const m = GAME_RE.exec(name);
+  return m && m[1] !== 'Medalha' ? m[1] : null;
+}
+
+function renderGameFilter() {
+  const games = [...new Set(state.clips.map((c) => gameOf(c.name)).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, 'pt-BR'),
+  );
+  if (state.game && !games.includes(state.game)) state.game = '';
+  const select = $('#game-filter');
+  select.replaceChildren(
+    el('option', { value: '' }, 'Todos os jogos'),
+    ...games.map((g) => el('option', { value: g }, g)),
+  );
+  select.value = state.game;
+  select.hidden = games.length === 0;
+}
+
 async function refreshClips() {
   try {
     state.clips = await invoke('list_clips');
@@ -169,6 +196,7 @@ async function refreshClips() {
     return;
   }
   $('#clip-count').textContent = state.clips.length || '';
+  renderGameFilter();
   renderClips();
 }
 
@@ -177,9 +205,13 @@ const refreshSoon = debounce(refreshClips, 600);
 function renderClips() {
   const grid = $('#grid');
   const q = state.filter.trim().toLowerCase();
-  const clips = q ? state.clips.filter((c) => c.name.toLowerCase().includes(q)) : state.clips;
+  const clips = state.clips.filter(
+    (c) => (!q || c.name.toLowerCase().includes(q)) && (!state.game || gameOf(c.name) === state.game),
+  );
+  metaQueue.reset();
   grid.replaceChildren(...clips.map(clipCard));
   $('#empty').hidden = state.clips.length > 0;
+  $('#no-match').hidden = state.clips.length === 0 || clips.length > 0;
 }
 
 function clipCard(clip) {
@@ -216,7 +248,11 @@ function clipCard(clip) {
         'div',
         { class: 'card-text' },
         el('div', { class: 'card-title', title: clip.name }, clip.name),
-        el('div', { class: 'card-sub' }, `${dateFmt.format(new Date(clip.modified))} · ${formatSize(clip.size)}`),
+        el(
+          'div',
+          { class: 'card-sub' },
+          [gameOf(clip.name), dateFmt.format(new Date(clip.modified)), formatSize(clip.size)].filter(Boolean).join(' · '),
+        ),
       ),
       el('button', { class: 'icon-btn', title: 'Mostrar na pasta', onclick: () => invoke('reveal_clip', { path: clip.path }) }, icon(ICONS.folder)),
       el('button', { class: 'icon-btn', title: 'Renomear', onclick: () => renameClip(clip) }, icon(ICONS.edit)),
@@ -263,12 +299,19 @@ const metaQueue = (() => {
       pending.set(element, { path, apply });
       observer.observe(element);
     },
+    /** Esquece os cards da renderização anterior (já saíram da página). */
+    reset() {
+      observer.disconnect();
+      pending.clear();
+    },
   };
 })();
 
 function play(clip) {
   const video = $('#player-video');
   $('#player-title').textContent = clip.name;
+  Object.assign(trim, { clip, duration: 0, start: 0, end: 0 });
+  renderTrim();
   video.src = convertFileSrc(clip.path);
   $('#player-open').onclick = () => invoke('open_clip', { path: clip.path });
   openModal($('#player'));
@@ -280,6 +323,121 @@ $('#player').addEventListener('close', () => {
   video.pause();
   video.removeAttribute('src');
   video.load();
+  trim.clip = null;
+});
+
+// ---------- corte ----------
+
+const MIN_TRIM = 0.5;
+const trim = { clip: null, duration: 0, start: 0, end: 0, saving: false };
+const playerVideo = $('#player-video');
+const trimTrack = $('#trim-track');
+
+function formatTime(t) {
+  const m = Math.floor(t / 60);
+  return `${m}:${(t - m * 60).toFixed(1).padStart(4, '0')}`;
+}
+
+function trimmed() {
+  return trim.duration > 0 && (trim.start > 0.05 || trim.end < trim.duration - 0.05);
+}
+
+function renderTrim() {
+  const d = trim.duration;
+  $('#trim').hidden = !(d > MIN_TRIM);
+  if ($('#trim').hidden) return;
+  const a = (trim.start / d) * 100;
+  const b = (trim.end / d) * 100;
+  Object.assign($('#trim-sel').style, { left: `${a}%`, width: `${b - a}%` });
+  trimTrack.querySelector('[data-edge="start"]').style.left = `${a}%`;
+  trimTrack.querySelector('[data-edge="end"]').style.left = `${b}%`;
+  $('#trim-label').textContent =
+    `${formatTime(trim.start)} – ${formatTime(trim.end)} · ${(trim.end - trim.start).toFixed(1)} s`;
+  $('#trim-save').disabled = trim.saving || !trimmed();
+  $('#trim-reset').disabled = trim.saving || !trimmed();
+}
+
+function renderPlayhead() {
+  if (trim.duration > 0) $('#trim-head').style.left = `${(playerVideo.currentTime / trim.duration) * 100}%`;
+}
+
+function setEdge(edge, t) {
+  if (!(trim.duration > MIN_TRIM)) return;
+  if (edge === 'start') trim.start = Math.max(0, Math.min(t, trim.end - MIN_TRIM));
+  else trim.end = Math.min(trim.duration, Math.max(t, trim.start + MIN_TRIM));
+  renderTrim();
+}
+
+playerVideo.addEventListener('loadedmetadata', () => {
+  if (!trim.clip) return;
+  trim.duration = Number.isFinite(playerVideo.duration) ? playerVideo.duration : 0;
+  trim.start = 0;
+  trim.end = trim.duration;
+  renderTrim();
+  renderPlayhead();
+});
+
+playerVideo.addEventListener('timeupdate', () => {
+  // Com um trecho marcado, o player fica em loop nele (prévia do corte).
+  if (trimmed() && !playerVideo.paused && playerVideo.currentTime >= trim.end) playerVideo.currentTime = trim.start;
+  renderPlayhead();
+});
+
+function timeAt(e) {
+  const r = trimTrack.getBoundingClientRect();
+  return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * trim.duration;
+}
+
+trimTrack.addEventListener('pointerdown', (e) => {
+  if (!(trim.duration > 0)) return;
+  const handle = e.target.closest('.trim-handle');
+  if (!handle) {
+    playerVideo.currentTime = timeAt(e);
+    renderPlayhead();
+    return;
+  }
+  e.preventDefault();
+  const edge = handle.dataset.edge;
+  handle.setPointerCapture(e.pointerId);
+  const move = (ev) => {
+    setEdge(edge, timeAt(ev));
+    playerVideo.currentTime = edge === 'start' ? trim.start : trim.end;
+  };
+  handle.addEventListener('pointermove', move);
+  handle.addEventListener('lostpointercapture', () => handle.removeEventListener('pointermove', move), { once: true });
+});
+
+$('#trim-in').addEventListener('click', () => setEdge('start', playerVideo.currentTime));
+$('#trim-out').addEventListener('click', () => setEdge('end', playerVideo.currentTime));
+$('#trim-reset').addEventListener('click', () => {
+  trim.start = 0;
+  trim.end = trim.duration;
+  renderTrim();
+});
+
+$('#trim-save').addEventListener('click', async () => {
+  const button = $('#trim-save');
+  trim.saving = true;
+  button.textContent = 'Salvando…';
+  renderTrim();
+  try {
+    const clip = await invoke('trim_clip', { path: trim.clip.path, start: trim.start, end: trim.end });
+    toast(`Corte salvo: ${clip.name}`, 'ok');
+    refreshClips();
+  } catch (e) {
+    toast(String(e), 'error');
+  } finally {
+    trim.saving = false;
+    button.textContent = 'Salvar corte';
+    renderTrim();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (!$('#player').open || e.ctrlKey || e.altKey || e.metaKey || e.target.matches('input, textarea, select')) return;
+  const key = e.key.toLowerCase();
+  if (key === 'i') setEdge('start', playerVideo.currentTime);
+  else if (key === 'o') setEdge('end', playerVideo.currentTime);
 });
 
 for (const b of document.querySelectorAll('[data-close]')) {
@@ -344,6 +502,10 @@ $('#search').addEventListener('input', (e) => {
   state.filter = e.target.value;
   renderClips();
 });
+$('#game-filter').addEventListener('change', (e) => {
+  state.game = e.target.value;
+  renderClips();
+});
 $('#open-dir').addEventListener('click', () => invoke('open_clips_dir'));
 
 // ---------- configurações ----------
@@ -398,6 +560,14 @@ async function renderDiagnostics() {
       ['Pipeline ativo', state.status?.detail ?? '—'],
     ];
     dl.replaceChildren(...rows.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]));
+    if (d.platform.includes('wayland')) {
+      // O plugin registra o atalho via XWayland: só dispara com uma janela X11 em foco.
+      const hint = $('#hotkey-hint');
+      hint.hidden = false;
+      hint.textContent =
+        'No Wayland o atalho global só funciona com o foco em janelas XWayland (a maioria dos jogos). ' +
+        'Para funcionar sempre, crie um atalho do sistema que rode "medalha --save-clip".';
+    }
   } catch (e) {
     dl.replaceChildren(el('dt', {}, 'Erro'), el('dd', {}, String(e)));
   }

@@ -111,6 +111,8 @@ kbd {
   border: 1px solid var(--line); background: var(--surface); outline: none;
 }
 #search:focus { border-color: var(--accent); }
+#game-filter { max-width: 220px; background: var(--surface); }
+.no-match { margin: 40px 24px; text-align: center; color: var(--muted); }
 
 .banner {
   margin: 0 24px 12px; padding: 10px 14px; border-radius: var(--radius);
@@ -146,7 +148,7 @@ kbd {
 .card-body { display: flex; align-items: center; gap: 6px; padding: 10px 8px 10px 12px; }
 .card-text { min-width: 0; flex: 1; }
 .card-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-sub { color: var(--faint); font-size: 12px; margin-top: 2px; }
+.card-sub { color: var(--faint); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .icon-btn { width: 28px; height: 28px; }
 .card .icon-btn svg { width: 16px; height: 16px; }
 .card .icon-btn.danger:hover { color: var(--rec); }
@@ -168,7 +170,28 @@ kbd {
 .modal .actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--line); }
 
 .player { width: min(1200px, 92vw); }
-.player video { display: block; width: 100%; max-height: 76vh; background: #000; }
+.player video { display: block; width: 100%; max-height: 68vh; background: #000; }
+
+/* corte */
+.trim { padding: 14px 18px 16px; border-top: 1px solid var(--line); display: grid; gap: 12px; }
+.trim-track {
+  position: relative; height: 28px; border-radius: 6px; cursor: pointer; touch-action: none;
+  background: var(--surface-2); border: 1px solid var(--line);
+}
+.trim-sel {
+  position: absolute; top: -1px; bottom: -1px; border-radius: 6px;
+  background: rgba(246, 183, 60, .16); border: 2px solid var(--accent);
+}
+.trim-head { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text); pointer-events: none; }
+.trim-handle {
+  position: absolute; top: -4px; bottom: -4px; width: 12px; margin-left: -6px; border-radius: 4px;
+  background: var(--accent); cursor: ew-resize; box-shadow: 0 0 0 2px var(--surface);
+}
+.trim-handle:hover { background: var(--accent-hover); }
+.trim-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.trim-bar kbd { background: rgba(255, 255, 255, .06); border-color: var(--line); }
+.trim-label { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 4px; }
+.trim-bar button:disabled { opacity: .45; cursor: default; }
 
 .small { width: min(420px, 92vw); }
 .small form { padding: 0; }
