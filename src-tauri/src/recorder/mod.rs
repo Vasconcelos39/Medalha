@@ -15,8 +15,8 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(target_os = "linux")]
-const GSR_HINT: &str = "No Wayland a captura precisa do gpu-screen-recorder: instale pelo gerenciador \
-    da sua distro (ou flatpak com.dec05eba.gpu_screen_recorder) e reinicie o buffer.";
+const GSR_HINT: &str = "No Wayland a captura precisa do gpu-screen-recorder, e ele não está instalado \
+    (nem no sistema nem como Flatpak). Clique em \"Instalar gpu-screen-recorder\" para baixá-lo do Flathub.";
 
 enum Session {
     Ffmpeg(ffmpeg::FfmpegSession),
@@ -91,6 +91,8 @@ pub struct Status {
     pub since: Option<i64>,
     pub hotkey: String,
     pub hotkey_ok: bool,
+    /// Correção que a UI pode oferecer para o erro atual: "install-gsr".
+    pub action: Option<String>,
 }
 
 struct Inner {
@@ -113,6 +115,24 @@ pub fn emit_error(app: &AppHandle, message: impl Into<String>) {
     let _ = app.emit("clip-error", message.into());
 }
 
+#[cfg(target_os = "linux")]
+pub use gsr::install as install_gsr;
+
+#[cfg(not(target_os = "linux"))]
+pub fn install_gsr() -> Result<(), String> {
+    Err("O gpu-screen-recorder só existe no Linux.".into())
+}
+
+#[cfg(target_os = "linux")]
+fn suggested_action(error: &str) -> Option<String> {
+    (error == GSR_HINT).then(|| "install-gsr".into())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn suggested_action(_error: &str) -> Option<String> {
+    None
+}
+
 /// Nome do jogo para o arquivo, se a opção estiver ligada.
 fn focused_game(app: &AppHandle) -> Option<String> {
     let enabled = app.state::<AppState>().config.lock().unwrap().game_in_name;
@@ -132,6 +152,7 @@ impl Recorder {
                     since: None,
                     hotkey: String::new(),
                     hotkey_ok: false,
+                    action: None,
                 },
                 generation: 0,
                 pipeline: None,
@@ -174,6 +195,7 @@ impl Recorder {
             inner.status.state = "starting".into();
             inner.status.error = None;
             inner.status.detail = None;
+            inner.status.action = None;
             inner.generation
         };
         self.emit(app);
@@ -202,6 +224,7 @@ impl Recorder {
                 }
                 Err(e) => {
                     inner.status.state = "error".into();
+                    inner.status.action = suggested_action(&e);
                     inner.status.error = Some(e);
                 }
             }
@@ -304,6 +327,7 @@ impl Recorder {
             inner.generation += 1;
             inner.status.state = "idle".into();
             inner.status.error = None;
+            inner.status.action = None;
             inner.status.since = None;
             inner.session.take()
         };

@@ -167,6 +167,14 @@ fn open_clips_dir(app: AppHandle) {
     clips::open_path(&dir);
 }
 
+/// Baixa o gpu-screen-recorder do Flathub e liga o buffer.
+#[tauri::command]
+async fn install_gsr(app: AppHandle) -> CmdResult<()> {
+    blocking(recorder::install_gsr).await??;
+    state(&app).recorder.start(&app);
+    Ok(())
+}
+
 #[tauri::command]
 fn set_medal_visible(app: AppHandle, visible: bool) {
     medal::set_visible(&app, visible);
@@ -212,7 +220,12 @@ async fn diagnostics(app: AppHandle) -> CmdResult<Diagnostics> {
         let gsr = None;
         Diagnostics {
             version,
-            platform: format!("{} ({})", std::env::consts::OS, util::session_kind()),
+            platform: format!(
+                "{} ({}){}",
+                std::env::consts::OS,
+                util::session_kind(),
+                if std::env::var_os("APPIMAGE").is_some() { " · AppImage" } else { "" }
+            ),
             ffmpeg: media::find_ffmpeg(&cfg.ffmpeg_path).map(|p| p.display().to_string()),
             gsr,
             backend: recorder::backend_label(&cfg),
@@ -381,6 +394,7 @@ fn main() {
             reveal_clip,
             open_clip,
             open_clips_dir,
+            install_gsr,
             set_medal_visible,
             medal_nav,
             pick_folder,

@@ -1,7 +1,7 @@
 //! Descoberta do ffmpeg e escolha do pipeline de captura/encoder.
 
 use crate::config::Config;
-use crate::util::{command, run_with_timeout, which};
+use crate::util::{command, find_program, run_with_timeout};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -22,7 +22,7 @@ pub fn find_ffmpeg(custom: &str) -> Option<PathBuf> {
             return Some(p);
         }
     }
-    if let Some(p) = which("ffmpeg") {
+    if let Some(p) = find_program("ffmpeg") {
         return Some(p);
     }
     #[cfg(windows)]

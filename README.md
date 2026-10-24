@@ -63,7 +63,7 @@ winget install Gyan.FFmpeg
 sudo apt install ffmpeg libwebkit2gtk-4.1-0 gstreamer1.0-libav gstreamer1.0-plugins-good
 ```
 
-Para Wayland (e para gravar melhor também no X11), instale o [gpu-screen-recorder](https://git.dec05eba.com/gpu-screen-recorder/about/). Ele está no AUR, no Flathub e em vários repositórios:
+Para Wayland (e para gravar melhor também no X11), instale o [gpu-screen-recorder](https://git.dec05eba.com/gpu-screen-recorder/about/). Se o Medalha não o encontrar, a aba Clipes mostra um botão que instala o Flatpak do Flathub com um clique. Ele também está no AUR e em vários repositórios:
 
 ```bash
 flatpak install flathub com.dec05eba.gpu_screen_recorder

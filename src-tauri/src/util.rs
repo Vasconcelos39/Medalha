@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
-/// `Command` que não abre janela de console no Windows.
+/// `Command` que não abre janela de console no Windows e, dentro de um AppImage,
+/// não repassa o ambiente das bibliotecas empacotadas para os programas do sistema.
 pub fn command(program: impl AsRef<OsStr>) -> Command {
     #[allow(unused_mut)]
     let mut cmd = Command::new(program);
@@ -14,7 +15,86 @@ pub fn command(program: impl AsRef<OsStr>) -> Command {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
+    #[cfg(target_os = "linux")]
+    if let Some(appdir) = std::env::var_os("APPDIR") {
+        clean_appimage_env(&mut cmd, Path::new(&appdir));
+    }
     cmd
+}
+
+/// Variáveis que o AppRun e os hooks gtk/gstreamer do AppImage exportam só para o
+/// próprio Medalha. Herdadas, fazem flatpak, ffmpeg, pactl etc. carregarem módulos
+/// de dentro do AppImage em vez dos do sistema.
+#[cfg(target_os = "linux")]
+const APPIMAGE_VARS: &[&str] = &[
+    "LD_LIBRARY_PATH",
+    "LD_PRELOAD",
+    "GDK_BACKEND",
+    "GDK_PIXBUF_MODULE_FILE",
+    "GDK_PIXBUF_MODULEDIR",
+    "GIO_EXTRA_MODULES",
+    "GIO_MODULE_DIR",
+    "GSETTINGS_SCHEMA_DIR",
+    "GTK_DATA_PREFIX",
+    "GTK_EXE_PREFIX",
+    "GTK_IM_MODULE_FILE",
+    "GTK_PATH",
+    "GST_PLUGIN_PATH",
+    "GST_PLUGIN_PATH_1_0",
+    "GST_PLUGIN_SCANNER",
+    "GST_PLUGIN_SCANNER_1_0",
+    "GST_PLUGIN_SYSTEM_PATH",
+    "GST_PLUGIN_SYSTEM_PATH_1_0",
+    "GST_PTP_HELPER",
+    "GST_PTP_HELPER_1_0",
+    "GST_REGISTRY_REUSE_PLUGIN_SCANNER",
+    "PERLLIB",
+    "PYTHONHOME",
+    "PYTHONPATH",
+    "QT_PLUGIN_PATH",
+];
+
+#[cfg(target_os = "linux")]
+fn clean_appimage_env(cmd: &mut Command, appdir: &Path) {
+    for var in APPIMAGE_VARS {
+        cmd.env_remove(var);
+    }
+    for var in ["PATH", "XDG_DATA_DIRS"] {
+        if let Some(value) = std::env::var_os(var) {
+            cmd.env(var, without_dir(&value, appdir));
+        }
+    }
+}
+
+/// Lista no formato do PATH sem as entradas dentro de `dir`.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn without_dir(list: &OsStr, dir: &Path) -> std::ffi::OsString {
+    let kept: Vec<PathBuf> = std::env::split_paths(list).filter(|p| !p.starts_with(dir)).collect();
+    std::env::join_paths(kept).unwrap_or_default()
+}
+
+/// Como `which`, mas também olha pastas que o PATH de apps abertos pelo menu
+/// costuma não ter (~/.local/bin, Homebrew do Bazzite/Universal Blue).
+pub fn find_program(name: &str) -> Option<PathBuf> {
+    which(name).or_else(|| extra_bin_dirs().into_iter().map(|d| d.join(name)).find(|p| p.is_file()))
+}
+
+#[cfg(target_os = "linux")]
+fn extra_bin_dirs() -> Vec<PathBuf> {
+    let mut dirs = vec![
+        PathBuf::from("/usr/local/bin"),
+        PathBuf::from("/usr/bin"),
+        PathBuf::from("/home/linuxbrew/.linuxbrew/bin"),
+    ];
+    if let Some(home) = std::env::var_os("HOME") {
+        dirs.insert(0, PathBuf::from(home).join(".local/bin"));
+    }
+    dirs
+}
+
+#[cfg(not(target_os = "linux"))]
+fn extra_bin_dirs() -> Vec<PathBuf> {
+    Vec::new()
 }
 
 /// Procura um executável no PATH.
@@ -161,4 +241,17 @@ pub fn join_tail(tail: &std::sync::Mutex<std::collections::VecDeque<String>>) ->
     tail.lock()
         .map(|t| t.iter().cloned().collect::<Vec<_>>().join("\n"))
         .unwrap_or_default()
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use std::ffi::OsStr;
+    use std::path::Path;
+
+    #[test]
+    fn drops_appimage_dirs() {
+        let path = OsStr::new("/tmp/.mount_MedalhXYZ/usr/bin:/usr/bin:/tmp/.mount_MedalhXYZ/usr/sbin:/home/u/.local/bin");
+        let cleaned = super::without_dir(path, Path::new("/tmp/.mount_MedalhXYZ"));
+        assert_eq!(cleaned, "/usr/bin:/home/u/.local/bin");
+    }
 }

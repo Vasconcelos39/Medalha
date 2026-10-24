@@ -135,7 +135,8 @@ function renderStatus() {
 
   const banner = $('#banner');
   if (s.state === 'error' && s.error) {
-    banner.textContent = s.error;
+    banner.replaceChildren(s.error);
+    if (s.action === 'install-gsr') banner.append(el('div', { class: 'banner-actions' }, installGsrButton()));
     banner.hidden = false;
   } else if (s.hotkey && !s.hotkeyOk) {
     banner.textContent =
@@ -158,7 +159,34 @@ function flashStatus(message) {
   }, 2500);
 }
 
+let installingGsr = false;
+
+function installGsrButton() {
+  return el(
+    'button',
+    { class: 'primary', onclick: installGsr, disabled: installingGsr ? '' : null },
+    installingGsr ? 'Instalando… (pode levar alguns minutos)' : 'Instalar gpu-screen-recorder',
+  );
+}
+
+async function installGsr() {
+  installingGsr = true;
+  renderStatus();
+  toast('Baixando o gpu-screen-recorder do Flathub…');
+  try {
+    await invoke('install_gsr');
+    toast('gpu-screen-recorder instalado. Ligando o buffer…', 'ok');
+  } catch (e) {
+    toast(`Não deu para instalar: ${e}`, 'error');
+  } finally {
+    installingGsr = false;
+    renderStatus();
+  }
+}
+
 $('#status').addEventListener('click', () => {
+  // Quando o erro tem correção (instalar o gsr), mostra o aviso com o botão em vez de tentar de novo.
+  if (state.status?.state === 'error' && state.status.action) return setTab('clips');
   const s = state.status?.state;
   invoke(s === 'recording' || s === 'starting' ? 'stop_buffer' : 'start_buffer');
 });

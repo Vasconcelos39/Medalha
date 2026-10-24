@@ -1,5 +1,13 @@
 # Mudanças
 
+## v0.2.1
+
+- **Instalar o gpu-screen-recorder com um clique**: no Wayland, se ele não estiver instalado, a aba Clipes mostra o botão *Instalar gpu-screen-recorder*, que baixa o Flatpak do Flathub e liga o buffer.
+- O gpu-screen-recorder em Flatpak agora é encontrado direto pela pasta de instalação, sem depender do `flatpak info`.
+- Programas do sistema (flatpak, ffmpeg, pactl, xprop…) rodam sem as variáveis do AppImage, que podiam fazê-los carregar bibliotecas de dentro dele.
+- O ffmpeg e o gpu-screen-recorder também são procurados em `~/.local/bin` e no Homebrew (Bazzite), que os apps abertos pelo menu não têm no PATH.
+- O diagnóstico mostra quando o Medalha está rodando como AppImage.
+
 ## v0.2.0
 
 **Novidades**
