@@ -172,6 +172,80 @@ pub fn wide(s: impl AsRef<OsStr>) -> Vec<u16> {
     s.as_ref().encode_wide().chain(std::iter::once(0)).collect()
 }
 
+/// Arquivo temporário ao lado de `out`. A extensão `.part` fica fora da lista de
+/// vídeos, então a aba Clipes não mostra o arquivo enquanto o ffmpeg escreve.
+pub fn partial_path(out: &Path) -> PathBuf {
+    let name = out.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    out.with_file_name(format!(".{name}.part"))
+}
+
+/// No Windows, põe o processo num job que o sistema encerra quando o Medalha fecha,
+/// mesmo se ele travar ou for morto pelo Gerenciador de Tarefas.
+#[cfg(windows)]
+pub fn kill_with_parent(child: &std::process::Child) {
+    use std::os::windows::io::AsRawHandle;
+    use std::sync::OnceLock;
+
+    // O handle do job nunca é fechado: ele fecha sozinho quando o processo termina.
+    static JOB: OnceLock<usize> = OnceLock::new();
+    let job = *JOB.get_or_init(|| unsafe { job::create() });
+    if job != 0 {
+        unsafe { job::AssignProcessToJobObject(job as job::Handle, child.as_raw_handle()) };
+    }
+}
+
+#[cfg(not(windows))]
+pub fn kill_with_parent(_child: &std::process::Child) {}
+
+#[cfg(windows)]
+mod job {
+    use std::ffi::c_void;
+
+    pub type Handle = *mut c_void;
+    const KILL_ON_JOB_CLOSE: u32 = 0x2000;
+    const EXTENDED_LIMIT_INFORMATION: i32 = 9;
+
+    /// `JOBOBJECT_EXTENDED_LIMIT_INFORMATION`
+    #[repr(C)]
+    #[derive(Default)]
+    struct ExtendedLimits {
+        per_process_user_time: i64,
+        per_job_user_time: i64,
+        limit_flags: u32,
+        min_working_set: usize,
+        max_working_set: usize,
+        active_process_limit: u32,
+        affinity: usize,
+        priority_class: u32,
+        scheduling_class: u32,
+        io_counters: [u64; 6],
+        process_memory_limit: usize,
+        job_memory_limit: usize,
+        peak_process_memory: usize,
+        peak_job_memory: usize,
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn CreateJobObjectW(attributes: *const c_void, name: *const u16) -> Handle;
+        fn SetInformationJobObject(job: Handle, class: i32, info: *const c_void, len: u32) -> i32;
+        pub fn AssignProcessToJobObject(job: Handle, process: Handle) -> i32;
+    }
+
+    pub unsafe fn create() -> usize {
+        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if job.is_null() {
+            return 0;
+        }
+        let limits = ExtendedLimits { limit_flags: KILL_ON_JOB_CLOSE, ..Default::default() };
+        let len = std::mem::size_of::<ExtendedLimits>() as u32;
+        if SetInformationJobObject(job, EXTENDED_LIMIT_INFORMATION, (&limits as *const ExtendedLimits).cast(), len) == 0 {
+            return 0;
+        }
+        job as usize
+    }
+}
+
 /// `dir/name`, ou `dir/name (2)` etc. se já existir.
 pub fn unique_path(dir: &Path, name: &str) -> PathBuf {
     let candidate = dir.join(name);

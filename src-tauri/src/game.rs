@@ -27,6 +27,23 @@ const KNOWN_APPS: &[(&str, &str)] = &[
     ("discord", "Discord"),
     ("steam", "Steam"),
     ("steamwebhelper", "Steam"),
+    ("spotify", "Spotify"),
+    ("obs64", "OBS"),
+    ("obs", "OBS"),
+    ("code", "VS Code"),
+    ("windowsterminal", "Terminal"),
+    ("openconsole", "Terminal"),
+    ("conhost", "Terminal"),
+    ("cmd", "Terminal"),
+    ("powershell", "Terminal"),
+    ("pwsh", "Terminal"),
+    ("konsole", "Terminal"),
+    ("gnome-terminal-", "Terminal"),
+    ("kitty", "Terminal"),
+    ("alacritty", "Terminal"),
+    ("wezterm-gui", "Terminal"),
+    ("foot", "Terminal"),
+    ("ptyxis", "Terminal"),
 ];
 
 const MAX_CHARS: usize = 40;

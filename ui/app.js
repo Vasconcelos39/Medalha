@@ -16,7 +16,7 @@ const state = {
   game: '',
 };
 
-// ---------- utilidades ----------
+// Utilidades
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -73,7 +73,7 @@ function debounce(fn, ms) {
   };
 }
 
-// ---------- abas ----------
+// Abas
 
 function setTab(tab) {
   state.tab = tab;
@@ -108,7 +108,7 @@ document.querySelectorAll('[data-nav]').forEach((b) =>
   b.addEventListener('click', () => invoke('medal_nav', { action: b.dataset.nav })),
 );
 
-// ---------- status do gravador ----------
+// Status do gravador
 
 let flashTimer;
 
@@ -122,11 +122,12 @@ function renderStatus() {
   const labels = {
     idle: 'Buffer desligado',
     starting: 'Iniciando…',
-    recording: `Buffer ${secs}s · ${s.backend ?? ''}`,
-    error: 'Erro no buffer',
+    recording: `Gravando · ${secs} s`,
+    error: 'Buffer com erro',
   };
   if (!btn.classList.contains('flash')) text.textContent = labels[s.state] ?? s.state;
-  btn.title = s.error || s.detail || 'Ligar/desligar o replay buffer';
+  btn.title = s.error || s.warning || (s.detail ? `Clique para desligar. ${s.detail}` : 'Clique para ligar o buffer');
+  btn.classList.toggle('warn', Boolean(s.warning));
   $('#save-btn').disabled = s.state !== 'recording';
   for (const k of document.querySelectorAll('#hotkey-label, .hotkey-inline')) {
     k.textContent = s.hotkey || '—';
@@ -142,6 +143,9 @@ function renderStatus() {
     banner.textContent =
       `Não foi possível registrar o atalho global "${s.hotkey}". No Wayland, crie um atalho no seu ` +
       `ambiente (GNOME/KDE) que rode:  medalha --save-clip`;
+    banner.hidden = false;
+  } else if (s.state === 'recording' && s.warning) {
+    banner.textContent = s.warning;
     banner.hidden = false;
   } else {
     banner.hidden = true;
@@ -192,7 +196,7 @@ $('#status').addEventListener('click', () => {
 });
 $('#save-btn').addEventListener('click', () => invoke('save_clip'));
 
-// ---------- clipes ----------
+// Clipes
 
 /** `Jogo_2026-10-23_21-00-00` → `Jogo` (o Rust põe o jogo em foco no nome ao salvar). */
 const GAME_RE = /^(.+?)_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}/;
@@ -311,7 +315,8 @@ const metaQueue = (() => {
       running++;
       invoke('clip_meta', { path })
         .then((m) => {
-          state.meta.set(path, m);
+          // Sem miniatura (arquivo ainda sendo escrito, por exemplo): tenta de novo na próxima vez.
+          if (m.thumb) state.meta.set(path, m);
           apply(m);
         })
         .catch(() => {})
@@ -354,7 +359,7 @@ $('#player').addEventListener('close', () => {
   trim.clip = null;
 });
 
-// ---------- corte ----------
+// Corte
 
 const MIN_TRIM = 0.5;
 const trim = { clip: null, duration: 0, start: 0, end: 0, saving: false };
@@ -482,8 +487,7 @@ function ask({ title, text = '', value = null, ok = 'OK', danger = false }) {
   input.value = value ?? '';
   const okBtn = $('#prompt-ok');
   okBtn.textContent = ok;
-  okBtn.style.background = danger ? 'var(--rec)' : '';
-  okBtn.style.color = danger ? '#fff' : '';
+  okBtn.classList.toggle('danger', danger);
   return new Promise((resolve) => {
     dialog.returnValue = '';
     dialog.addEventListener(
@@ -536,7 +540,7 @@ $('#game-filter').addEventListener('change', (e) => {
 });
 $('#open-dir').addEventListener('click', () => invoke('open_clips_dir'));
 
-// ---------- configurações ----------
+// Configurações
 
 const form = $('#settings-form');
 
@@ -622,11 +626,18 @@ $('#pick-dir').addEventListener('click', async () => {
   if (dir) form.elements.clipsDir.value = dir;
 });
 
-// Captura de atalho: clique no campo e aperte a combinação.
+// Captura do atalho. O atual fica solto enquanto isso; senão apertá-lo salvaria um clipe.
 const hotkeyInput = $('#hotkey-input');
-hotkeyInput.addEventListener('focus', () => hotkeyInput.classList.add('capturing'));
-hotkeyInput.addEventListener('blur', () => hotkeyInput.classList.remove('capturing'));
+hotkeyInput.addEventListener('focus', () => {
+  hotkeyInput.classList.add('capturing');
+  invoke('suspend_hotkey', { suspended: true });
+});
+hotkeyInput.addEventListener('blur', () => {
+  hotkeyInput.classList.remove('capturing');
+  invoke('suspend_hotkey', { suspended: false });
+});
 hotkeyInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab' || e.key === 'Enter') return; // navegar e confirmar continuam funcionando
   e.preventDefault();
   if (e.key === 'Escape') return hotkeyInput.blur();
   if (['Control', 'Shift', 'Alt', 'Meta', 'OS'].includes(e.key)) return;
@@ -640,7 +651,7 @@ hotkeyInput.addEventListener('keydown', (e) => {
   hotkeyInput.blur();
 });
 
-// ---------- eventos do Rust ----------
+// Eventos do Rust
 
 listen('recorder-status', (e) => {
   state.status = e.payload;
@@ -648,7 +659,7 @@ listen('recorder-status', (e) => {
 });
 listen('clip-saving', () => flashStatus('Salvando clipe…'));
 listen('clip-saved', (e) => {
-  flashStatus('Clipe salvo ✓');
+  flashStatus('Clipe salvo');
   if (state.tab === 'clips') toast(`Clipe salvo: ${e.payload.name}`, 'ok');
   refreshClips();
 });
@@ -658,7 +669,7 @@ listen('clip-error', (e) => {
 });
 listen('clips-changed', () => refreshSoon());
 
-// ---------- início ----------
+// Início
 
 (async () => {
   state.config = await invoke('get_config');

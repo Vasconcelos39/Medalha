@@ -4,7 +4,7 @@
 
 use crate::config::Config;
 use crate::media::{Capture, VideoPipeline};
-use crate::util::{command, join_tail, run_with_timeout, tail_reader};
+use crate::util::{command, join_tail, kill_with_parent, partial_path, run_with_timeout, tail_reader};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
@@ -45,6 +45,7 @@ impl FfmpegSession {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| format!("não consegui iniciar o ffmpeg: {e}"))?;
+        kill_with_parent(&child);
         let stderr = tail_reader(child.stderr.take().expect("stderr"), 12);
 
         #[cfg(windows)]
@@ -85,24 +86,53 @@ impl FfmpegSession {
     }
 }
 
+/// Segmentos com dados, do mais antigo ao mais novo (pela data de modificação).
+fn segments(dir: &Path) -> Vec<(SystemTime, PathBuf)> {
+    let mut segments: Vec<(SystemTime, PathBuf)> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|x| x == "ts"))
+        .filter_map(|e| {
+            let meta = e.metadata().ok()?;
+            (meta.len() > 0).then(|| (meta.modified().ok().unwrap_or(SystemTime::UNIX_EPOCH), e.path()))
+        })
+        .collect();
+    segments.sort();
+    segments
+}
+
 impl Saver {
+    /// Quantas vezes mais devagar que o tempo real o ffmpeg está gravando: o tempo
+    /// que os últimos segmentos levaram dividido pelo que eles deveriam cobrir.
+    /// Passa de 1 quando a máquina não dá conta do fps configurado.
+    pub fn slowdown(&self) -> Option<f64> {
+        let mut times: Vec<SystemTime> = segments(&self.buffer_dir).into_iter().map(|(t, _)| t).collect();
+        times.pop(); // o mais novo ainda está aberto
+        let recent = &times[times.len().saturating_sub(6)..];
+        if recent.len() < 6 {
+            return None;
+        }
+        let wall = recent.last()?.duration_since(recent[0]).ok()?.as_secs_f64();
+        Some(wall / ((recent.len() - 1) as f64 * SEGMENT_SECS as f64))
+    }
+
     pub fn save(&self, out: &Path, secs: u32) -> Result<(), String> {
-        let mut segments: Vec<(SystemTime, PathBuf)> = std::fs::read_dir(&self.buffer_dir)
-            .map_err(|e| e.to_string())?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().is_some_and(|x| x == "ts"))
-            .filter_map(|e| {
-                let meta = e.metadata().ok()?;
-                (meta.len() > 0).then(|| (meta.modified().ok().unwrap_or(SystemTime::UNIX_EPOCH), e.path()))
-            })
-            .collect();
+        let segments = segments(&self.buffer_dir);
         if segments.is_empty() {
             return Err("O buffer ainda está vazio, espere alguns segundos.".into());
         }
-        segments.sort();
-        // +1 porque o segmento mais novo ainda está sendo gravado.
-        let count = secs.div_ceil(SEGMENT_SECS) as usize + 1;
-        let chosen = &segments[segments.len().saturating_sub(count)..];
+        // A data de modificação de cada segmento é o fim dele: o primeiro que termina
+        // dentro da janela já contém o começo dela. Contar segmentos não dá certo,
+        // porque o keyframe vem a cada N frames e, quando o ffmpeg perde frames, um
+        // segmento passa de 2 s e o clipe sai mais longo que o pedido.
+        let newest = segments.last().map(|(t, _)| *t).unwrap_or(SystemTime::UNIX_EPOCH);
+        let window = Duration::from_secs(secs.into());
+        let first = segments
+            .iter()
+            .position(|(t, _)| newest.duration_since(*t).map(|age| age < window).unwrap_or(true))
+            .unwrap_or(0);
+        let chosen = &segments[first..];
 
         let list: String = chosen
             .iter()
@@ -114,19 +144,20 @@ impl Saver {
         let list_path = self.buffer_dir.with_extension("concat.txt");
         std::fs::write(&list_path, list).map_err(|e| e.to_string())?;
 
+        let partial = partial_path(out);
         let mut cmd = command(&self.ffmpeg);
         cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-f", "concat", "-safe", "0", "-i"])
             .arg(&list_path)
-            .args(["-map", "0", "-c", "copy", "-movflags", "+faststart"])
-            .arg(out);
+            .args(["-map", "0", "-c", "copy", "-movflags", "+faststart", "-f", "mp4"])
+            .arg(&partial);
         let result = run_with_timeout(cmd, Duration::from_secs(120));
         let _ = std::fs::remove_file(&list_path);
         let output = result.ok_or("ffmpeg demorou demais para salvar o clipe")?;
-        let ok = output.status.success() && out.metadata().map(|m| m.len() > 0).unwrap_or(false);
+        let ok = output.status.success() && partial.metadata().map(|m| m.len() > 0).unwrap_or(false);
         if ok {
-            Ok(())
+            std::fs::rename(&partial, out).map_err(|e| e.to_string())
         } else {
-            let _ = std::fs::remove_file(out);
+            let _ = std::fs::remove_file(&partial);
             Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
         }
     }

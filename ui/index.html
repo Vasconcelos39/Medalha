@@ -42,12 +42,11 @@
 
     <div class="spacer"></div>
 
-    <button class="status" id="status" title="Ligar/desligar o replay buffer">
+    <button class="status" id="status" title="Ligar ou desligar o buffer">
       <span class="dot"></span>
-      <span class="status-text" id="status-text">Parado</span>
+      <span class="status-text" id="status-text">Buffer desligado</span>
     </button>
     <button class="primary" id="save-btn" title="Salvar os últimos segundos">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/></svg>
       <span>Salvar clipe</span>
       <kbd id="hotkey-label">F8</kbd>
     </button>
@@ -111,131 +110,181 @@
     </div>
   </dialog>
 
-  <!-- Renomear / confirmar -->
+  <!-- Renomear / confirmar. Cancelar é type=button para o Enter confirmar. -->
   <dialog id="prompt" class="modal small">
     <form method="dialog">
       <h2 id="prompt-title"></h2>
       <p id="prompt-text"></p>
       <input id="prompt-input" type="text" autocomplete="off">
       <div class="actions">
-        <button value="cancel" class="ghost">Cancelar</button>
+        <button type="button" class="ghost" data-close>Cancelar</button>
         <button value="ok" class="primary" id="prompt-ok">OK</button>
       </div>
     </form>
   </dialog>
 
-  <!-- Configurações -->
   <dialog id="settings" class="modal settings">
     <form id="settings-form" method="dialog">
       <div class="modal-head">
         <h2>Configurações</h2>
         <div class="spacer"></div>
-        <button class="icon-btn" value="cancel" title="Fechar">
+        <button type="button" class="icon-btn" data-close title="Fechar">
           <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
       </div>
 
       <div class="settings-body">
-        <section>
-          <h3>Replay buffer</h3>
-          <label>Gravador
-            <select name="backend">
-              <option value="auto">Automático</option>
-              <option value="ffmpeg">ffmpeg</option>
-              <option value="gsr" data-linux>gpu-screen-recorder (Linux)</option>
-            </select>
-          </label>
-          <label>Duração do clipe (segundos)
-            <input name="bufferSecs" type="number" min="5" max="600" step="5">
-          </label>
-          <label>Quadros por segundo
-            <select name="fps">
-              <option value="30">30</option>
-              <option value="60">60</option>
-              <option value="120">120</option>
-              <option value="144">144</option>
-            </select>
-          </label>
-          <label>Qualidade
-            <select name="quality">
-              <option value="medium">Média</option>
-              <option value="high">Alta</option>
-              <option value="ultra">Ultra</option>
-            </select>
-          </label>
-          <label>Resolução máxima
-            <select name="resolution">
-              <option value="native">Nativa</option>
-              <option value="1440">1440p</option>
-              <option value="1080">1080p</option>
-              <option value="720">720p</option>
-            </select>
-          </label>
-          <label>Encoder (ffmpeg)
-            <select name="encoder">
-              <option value="auto">Automático (GPU se houver)</option>
-              <option value="h264_nvenc">NVIDIA NVENC</option>
-              <option value="h264_amf" data-windows>AMD AMF</option>
-              <option value="h264_qsv" data-windows>Intel Quick Sync</option>
-              <option value="h264_vaapi" data-linux>VA-API (AMD/Intel)</option>
-              <option value="libx264">CPU (x264)</option>
-            </select>
-          </label>
-          <label>Monitor
-            <input name="monitor" type="number" min="0" max="8">
-          </label>
-          <label data-linux>Captura (gpu-screen-recorder)
-            <select name="gsrCapture">
-              <option value="auto">Automática (portal no Wayland)</option>
-              <option value="screen">Tela inteira (KMS)</option>
-              <option value="portal">Portal do desktop</option>
-              <option value="focused">Janela em foco (X11)</option>
-            </select>
-          </label>
+        <section class="group">
+          <h3>Gravação</h3>
+          <div class="rows">
+            <label class="row">
+              <span class="row-text">Duração do clipe<small>Quantos segundos o buffer guarda.</small></span>
+              <span class="unit"><input name="bufferSecs" type="number" min="5" max="600" step="5"> s</span>
+            </label>
+            <label class="row">
+              <span class="row-text">Quadros por segundo</span>
+              <select name="fps">
+                <option value="30">30</option>
+                <option value="60">60</option>
+                <option value="120">120</option>
+                <option value="144">144</option>
+              </select>
+            </label>
+            <label class="row">
+              <span class="row-text">Qualidade<small>Mais qualidade, arquivos maiores.</small></span>
+              <select name="quality">
+                <option value="medium">Média</option>
+                <option value="high">Alta</option>
+                <option value="ultra">Ultra</option>
+              </select>
+            </label>
+            <label class="row">
+              <span class="row-text">Resolução máxima</span>
+              <select name="resolution">
+                <option value="native">Nativa</option>
+                <option value="1440">1440p</option>
+                <option value="1080">1080p</option>
+                <option value="720">720p</option>
+              </select>
+            </label>
+            <label class="row">
+              <span class="row-text">Monitor<small>0 é o principal.</small></span>
+              <input name="monitor" type="number" min="0" max="8">
+            </label>
+          </div>
         </section>
 
-        <section>
+        <section class="group">
           <h3>Áudio</h3>
-          <label class="check"><input name="systemAudio" type="checkbox"> Som do sistema</label>
-          <label class="check"><input name="mic" type="checkbox"> Microfone</label>
+          <div class="rows">
+            <label class="row">
+              <span class="row-text">Som do sistema<small>Jogo, Discord, música.</small></span>
+              <input name="systemAudio" type="checkbox" class="switch">
+            </label>
+            <label class="row">
+              <span class="row-text">Microfone</span>
+              <input name="mic" type="checkbox" class="switch">
+            </label>
+          </div>
         </section>
 
-        <section>
-          <h3>Atalho e pasta</h3>
-          <label>Atalho para salvar
-            <input name="hotkey" id="hotkey-input" readonly placeholder="Clique e aperte as teclas">
-          </label>
+        <section class="group">
+          <h3>Atalho</h3>
+          <div class="rows">
+            <label class="row">
+              <span class="row-text">Salvar clipe<small>Clique no campo e aperte a combinação.</small></span>
+              <input name="hotkey" id="hotkey-input" readonly placeholder="Nenhum">
+            </label>
+          </div>
           <p class="hint" id="hotkey-hint" hidden></p>
-          <label>Pasta dos clipes
-            <span class="row">
-              <input name="clipsDir" type="text">
-              <button type="button" class="ghost" id="pick-dir">Escolher…</button>
-            </span>
-          </label>
-          <label class="check"><input name="gameInName" type="checkbox"> Nomear clipes com o jogo em foco</label>
-          <label>Caminho do ffmpeg (opcional)
-            <input name="ffmpegPath" type="text" placeholder="Detectar automaticamente">
-          </label>
         </section>
 
-        <section>
-          <h3>Comportamento</h3>
-          <label class="check"><input name="autostart" type="checkbox"> Iniciar com o sistema (na bandeja)</label>
-          <label class="check"><input name="startOnLaunch" type="checkbox"> Ligar o buffer ao abrir</label>
-          <label class="check"><input name="closeToTray" type="checkbox"> Fechar para a bandeja</label>
-          <label class="check"><input name="notifyOnSave" type="checkbox"> Notificar ao salvar clipe</label>
-          <label class="check"><input name="soundOnSave" type="checkbox"> Tocar som ao salvar clipe</label>
+        <section class="group">
+          <h3>Clipes</h3>
+          <div class="rows">
+            <div class="row stack">
+              <label class="row-text" for="clips-dir">Pasta dos clipes</label>
+              <span class="field">
+                <input name="clipsDir" id="clips-dir" type="text">
+                <button type="button" class="ghost" id="pick-dir">Escolher…</button>
+              </span>
+            </div>
+            <label class="row">
+              <span class="row-text">Nome do jogo no arquivo<small>Usa a janela em foco na hora de salvar.</small></span>
+              <input name="gameInName" type="checkbox" class="switch">
+            </label>
+            <label class="row">
+              <span class="row-text">Notificação ao salvar</span>
+              <input name="notifyOnSave" type="checkbox" class="switch">
+            </label>
+            <label class="row">
+              <span class="row-text">Som ao salvar</span>
+              <input name="soundOnSave" type="checkbox" class="switch">
+            </label>
+          </div>
         </section>
 
-        <section class="diag">
-          <h3>Diagnóstico</h3>
-          <dl id="diag"></dl>
+        <section class="group">
+          <h3>Sistema</h3>
+          <div class="rows">
+            <label class="row">
+              <span class="row-text">Iniciar com o sistema<small>Abre minimizado na bandeja.</small></span>
+              <input name="autostart" type="checkbox" class="switch">
+            </label>
+            <label class="row">
+              <span class="row-text">Ligar o buffer ao abrir</span>
+              <input name="startOnLaunch" type="checkbox" class="switch">
+            </label>
+            <label class="row">
+              <span class="row-text">Fechar para a bandeja<small>O X esconde a janela e o buffer continua.</small></span>
+              <input name="closeToTray" type="checkbox" class="switch">
+            </label>
+          </div>
         </section>
+
+        <details class="group advanced">
+          <summary>Avançado</summary>
+          <div class="rows">
+            <label class="row">
+              <span class="row-text">Gravador</span>
+              <select name="backend">
+                <option value="auto">Automático</option>
+                <option value="ffmpeg">ffmpeg</option>
+                <option value="gsr" data-linux>gpu-screen-recorder</option>
+              </select>
+            </label>
+            <label class="row">
+              <span class="row-text">Encoder do ffmpeg</span>
+              <select name="encoder">
+                <option value="auto">Automático</option>
+                <option value="h264_nvenc">NVIDIA NVENC</option>
+                <option value="h264_amf" data-windows>AMD AMF</option>
+                <option value="h264_qsv" data-windows>Intel Quick Sync</option>
+                <option value="h264_vaapi" data-linux>VA-API</option>
+                <option value="libx264">CPU (x264)</option>
+              </select>
+            </label>
+            <label class="row" data-linux>
+              <span class="row-text">Captura do gpu-screen-recorder</span>
+              <select name="gsrCapture">
+                <option value="auto">Automática</option>
+                <option value="screen">Tela inteira (KMS)</option>
+                <option value="portal">Portal do desktop</option>
+                <option value="focused">Janela em foco (X11)</option>
+              </select>
+            </label>
+            <div class="row stack">
+              <label class="row-text" for="ffmpeg-path">Caminho do ffmpeg</label>
+              <input name="ffmpegPath" id="ffmpeg-path" type="text" placeholder="Detectar automaticamente">
+            </div>
+          </div>
+          <dl id="diag" class="diag"></dl>
+        </details>
       </div>
 
       <div class="actions">
-        <button value="cancel" class="ghost">Cancelar</button>
-        <button value="save" class="primary" id="settings-save">Salvar</button>
+        <button type="button" class="ghost" data-close>Cancelar</button>
+        <button value="save" class="primary">Salvar</button>
       </div>
     </form>
   </dialog>

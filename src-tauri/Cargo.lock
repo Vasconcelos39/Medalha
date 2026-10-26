@@ -2238,10 +2238,11 @@ dependencies = [
 
 [[package]]
 name = "medalha"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "cpal",
+ "gtk",
  "libc",
  "notify",
  "serde",
@@ -2253,6 +2254,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-single-instance",
  "trash",
+ "webkit2gtk",
 ]
 
 [[package]]

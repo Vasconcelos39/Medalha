@@ -46,7 +46,7 @@ fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> impl s
     async move { handle.await.map_err(|e| e.to_string()) }
 }
 
-// ---------- comandos da interface ----------
+// Comandos chamados pela interface.
 
 #[tauri::command]
 fn get_status(app: AppHandle) -> recorder::Status {
@@ -175,6 +175,18 @@ async fn install_gsr(app: AppHandle) -> CmdResult<()> {
     Ok(())
 }
 
+/// Solta o atalho global enquanto o usuário grava um novo nas configurações;
+/// senão, apertar o atalho atual salvaria um clipe em vez de ser capturado.
+#[tauri::command]
+fn suspend_hotkey(app: AppHandle, suspended: bool) {
+    if suspended {
+        let _ = app.global_shortcut().unregister_all();
+    } else {
+        let hotkey = state(&app).config.lock().unwrap().hotkey.clone();
+        register_hotkey(&app, &hotkey);
+    }
+}
+
 #[tauri::command]
 fn set_medal_visible(app: AppHandle, visible: bool) {
     medal::set_visible(&app, visible);
@@ -234,7 +246,7 @@ async fn diagnostics(app: AppHandle) -> CmdResult<Diagnostics> {
     .await
 }
 
-// ---------- integração com o sistema ----------
+// Integração com o sistema.
 
 fn apply_clips_dir(app: &AppHandle, dir: &Path) {
     let _ = std::fs::create_dir_all(dir);
@@ -272,15 +284,15 @@ fn quit(app: &AppHandle) {
 fn handle_cli(app: &AppHandle, args: &[String], second_instance: bool) {
     let mut acted = false;
     for arg in args.iter().skip(1) {
-        acted = true;
         match arg.as_str() {
             "--save-clip" | "--save" => state(app).recorder.save(app),
             "--start" => state(app).recorder.start(app),
             "--stop" => in_background(app, |app| state(app).recorder.stop(app)),
             "--toggle" => in_background(app, |app| state(app).recorder.toggle(app)),
             "--show" => show_window(app),
-            _ => acted = false,
+            _ => continue,
         }
+        acted = true;
     }
     if second_instance && !acted {
         show_window(app);
@@ -299,7 +311,7 @@ fn build_window(app: &tauri::App, hidden: bool) -> tauri::Result<()> {
     let window = builder.build()?;
     let size = window.inner_size()?.to_logical::<f64>(window.scale_factor()?);
     window.add_child(
-        WebviewBuilder::new("ui", WebviewUrl::App("index.html".into())).auto_resize(),
+        WebviewBuilder::new(medal::UI_LABEL, WebviewUrl::App("index.html".into())).auto_resize(),
         LogicalPosition::new(0.0, 0.0),
         size,
     )?;
@@ -308,6 +320,7 @@ fn build_window(app: &tauri::App, hidden: bool) -> tauri::Result<()> {
         LogicalPosition::new(0.0, medal::HEADER_H),
         LogicalSize::new(size.width, (size.height - medal::HEADER_H).max(1.0)),
     )?;
+    medal::set_visible(window.app_handle(), true);
 
     let w = window.clone();
     window.on_window_event(move |event| match event {
@@ -395,6 +408,7 @@ fn main() {
             open_clip,
             open_clips_dir,
             install_gsr,
+            suspend_hotkey,
             set_medal_visible,
             medal_nav,
             pick_folder,

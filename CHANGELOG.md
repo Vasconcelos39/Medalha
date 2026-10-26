@@ -1,36 +1,46 @@
 # Mudanças
 
+## v0.2.2
+
+Correções:
+
+- Linux: o site do Medal aparecia deslocado para baixo, com a interface ocupando metade da janela. O GTK empilha os dois webviews em vez de sobrepor, e agora a interface encolhe para a altura do cabeçalho quando a aba Medal está aberta.
+- Linux: o gpu-screen-recorder em Flatpak grava numa pasta escondida dentro da pasta de clipes, que o sandbox dele consegue acessar.
+- Clipes salvos às vezes saíam mais longos que a duração configurada quando o ffmpeg perdia frames. Agora os segmentos são escolhidos pelo horário, não pela contagem.
+- O clipe e o corte são escritos num arquivo temporário e só aparecem na aba Clipes prontos. Antes a miniatura podia falhar e ficar em branco até reabrir o app.
+- Ligar e desligar o buffer rápido, ou mudar as configurações enquanto ele iniciava, podia apagar os segmentos da sessão nova.
+- Se a captura cair no meio do jogo, o buffer religa sozinho (até 5 tentativas seguidas).
+- Quando a máquina não dá conta do fps configurado (comum em notebook na bateria), o Medalha avisa e sugere 30 fps ou uma resolução menor, em vez de gravar clipes travados sem explicação.
+- Windows: o ffmpeg fecha junto com o Medalha, mesmo se o app travar ou for encerrado pelo Gerenciador de Tarefas.
+- Salvar um clipe não trava mais a interface por um instante no Linux enquanto o nome do jogo é lido.
+- Enter no "Renomear" e nas configurações confirmava como "Cancelar".
+- Ao gravar um atalho novo, apertar o atalho atual salvava um clipe.
+- Renomear mudando só maiúsculas e minúsculas dava "Já existe um clipe com esse nome" no Windows.
+- Mudar as configurações depois de um erro no buffer não tentava ligar de novo.
+- Terminais, editores e outros apps comuns não viram mais "nome do jogo" no arquivo.
+
+Interface:
+
+- Configurações reorganizadas em grupos, uma opção por linha. Gravador, encoder e caminho do ffmpeg ficaram em "Avançado".
+- Visual mais sóbrio no cabeçalho e na biblioteca.
+
 ## v0.2.1
 
-- **Instalar o gpu-screen-recorder com um clique**: no Wayland, se ele não estiver instalado, a aba Clipes mostra o botão *Instalar gpu-screen-recorder*, que baixa o Flatpak do Flathub e liga o buffer.
-- O gpu-screen-recorder em Flatpak agora é encontrado direto pela pasta de instalação, sem depender do `flatpak info`.
-- Programas do sistema (flatpak, ffmpeg, pactl, xprop…) rodam sem as variáveis do AppImage, que podiam fazê-los carregar bibliotecas de dentro dele.
-- O ffmpeg e o gpu-screen-recorder também são procurados em `~/.local/bin` e no Homebrew (Bazzite), que os apps abertos pelo menu não têm no PATH.
+- No Wayland, se o gpu-screen-recorder não estiver instalado, a aba Clipes oferece instalar o Flatpak do Flathub e liga o buffer em seguida.
+- O Flatpak do gpu-screen-recorder é encontrado direto pela pasta de instalação, sem depender do `flatpak info`.
+- Programas do sistema (flatpak, ffmpeg, pactl, xprop) rodam sem as variáveis do AppImage, que podiam fazê-los carregar bibliotecas de dentro dele.
+- O ffmpeg e o gpu-screen-recorder também são procurados em `~/.local/bin` e no Homebrew, que os apps abertos pelo menu não têm no PATH.
 - O diagnóstico mostra quando o Medalha está rodando como AppImage.
 
 ## v0.2.0
 
-**Novidades**
-
-- **Cortar clipes**: no player, arraste as alças (ou aperte `I` / `O`) para marcar o trecho e clique em *Salvar corte*. O corte vira um clipe novo, sem reencodar e sem mexer no original.
-- **Nome do jogo no clipe**: ao salvar, o clipe recebe o nome da janela em foco (`Elden Ring_2026-10-23_21-00-00.mp4`). A aba Clipes ganhou um filtro por jogo. Funciona no Windows, no X11, no Hyprland, no Sway e com jogos XWayland no GNOME/KDE.
-- **Iniciar com o sistema**: abre minimizado na bandeja quando você entra no Windows ou no Linux.
-- **Som ao salvar**: um bipe curto confirma que o clipe foi salvo (dá para desligar nas configurações).
-
-**Correções**
-
-- "Mostrar na pasta" no Windows usava um caminho `\\?\C:\…` que o Explorer não entende.
-- Avisos (erros e confirmações) ficavam escondidos atrás das janelas de configuração e do player.
-- Miniaturas: os cards antigos ficavam observados para sempre depois de cada atualização da lista.
-- Aba Clipes mostra um aviso quando a busca ou o filtro não encontram nada.
-- No Wayland, as configurações explicam que o atalho global só funciona com jogos XWayland.
-
-**Pacotes**
-
-- O `.deb` agora instala o `gstreamer1.0-libav` e o `gstreamer1.0-plugins-good`, necessários para o player tocar os clipes.
-- O AppImage traz o GStreamer junto.
-- Instaladores publicados em Releases: `.exe` (Windows), `.deb`, `.rpm` e `.AppImage` (Linux).
+- Corte de clipes no player: arraste as alças (ou aperte `I` e `O`) e salve o trecho como um clipe novo, sem reencodar e sem mexer no original.
+- Nome do jogo no arquivo do clipe e filtro por jogo na aba Clipes.
+- Iniciar com o sistema, minimizado na bandeja.
+- Som curto ao salvar um clipe (dá para desligar).
+- Correções: "Mostrar na pasta" no Windows, avisos escondidos atrás das janelas, miniaturas acumulando observadores, aviso de filtro sem resultados, dica do atalho no Wayland.
+- O `.deb` instala o GStreamer que o player precisa, o AppImage traz o GStreamer junto e a release publica `.exe`, `.deb`, `.rpm` e `.AppImage`.
 
 ## v0.1.0
 
-- Primeira versão: abas Medal e Clipes, replay buffer com ffmpeg (Windows/X11) e gpu-screen-recorder (Linux X11/Wayland), atalho global, bandeja e CLI.
+- Primeira versão: abas Medal e Clipes, replay buffer com ffmpeg (Windows, X11) e gpu-screen-recorder (Linux), atalho global, bandeja e comandos de linha de comando.

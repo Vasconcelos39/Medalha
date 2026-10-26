@@ -1,4 +1,4 @@
-//! Gerencia o replay buffer: escolhe o backend, mantém a sessão viva e salva clipes.
+//! Ciclo de vida do replay buffer: escolhe o backend, mantém a sessão viva e salva clipes.
 
 #[cfg(windows)]
 mod audio_win;
@@ -11,12 +11,17 @@ use crate::{clips, game, media, util, AppState};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(target_os = "linux")]
 const GSR_HINT: &str = "No Wayland a captura precisa do gpu-screen-recorder, e ele não está instalado \
     (nem no sistema nem como Flatpak). Clique em \"Instalar gpu-screen-recorder\" para baixá-lo do Flathub.";
+
+/// Tentativas de religar a captura quando ela cai sozinha (troca de resolução,
+/// UAC, tela bloqueada…). Zera depois que a sessão fica de pé por `STABLE_AFTER`.
+const MAX_RETRIES: u32 = 5;
+const STABLE_AFTER: Duration = Duration::from_secs(30);
 
 enum Session {
     Ffmpeg(ffmpeg::FfmpegSession),
@@ -40,7 +45,20 @@ impl Session {
             Session::Gsr(s) => s.stop(),
         }
     }
+
+    /// Aviso quando a captura não acompanha o tempo real (só dá para medir no ffmpeg).
+    fn performance_warning(&self) -> Option<String> {
+        match self {
+            Session::Ffmpeg(s) => s.saver.slowdown().filter(|r| *r > SLOW_RATIO).map(|_| SLOW_WARNING.to_string()),
+            #[cfg(target_os = "linux")]
+            Session::Gsr(_) => None,
+        }
+    }
 }
+
+const SLOW_RATIO: f64 = 1.3;
+const SLOW_WARNING: &str = "A gravação não está acompanhando o tempo real e os clipes podem sair travados. \
+    Tente 30 fps ou uma resolução menor nas configurações (num notebook, ligar o carregador também ajuda).";
 
 enum Backend {
     Ffmpeg,
@@ -93,6 +111,8 @@ pub struct Status {
     pub hotkey_ok: bool,
     /// Correção que a UI pode oferecer para o erro atual: "install-gsr".
     pub action: Option<String>,
+    /// Problema com o buffer ligado, por exemplo a máquina não dando conta do fps.
+    pub warning: Option<String>,
 }
 
 struct Inner {
@@ -100,11 +120,15 @@ struct Inner {
     status: Status,
     /// Incrementa a cada start/stop; threads antigas se aposentam ao ver outro valor.
     generation: u64,
+    retries: u32,
     pipeline: Option<(String, media::VideoPipeline)>,
 }
 
 pub struct Recorder {
     inner: Mutex<Inner>,
+    /// Criar e encerrar sessões acontece uma de cada vez. Sem isso, um start
+    /// cancelado podia apagar a pasta do buffer que o start seguinte já usava.
+    lifecycle: Mutex<()>,
     saving: AtomicBool,
     /// Jogo em foco quando o usuário pediu o replay; o gsr só avisa depois que salvou.
     #[cfg(target_os = "linux")]
@@ -139,6 +163,10 @@ fn focused_game(app: &AppHandle) -> Option<String> {
     enabled.then(game::focused).flatten()
 }
 
+fn recorder(app: &AppHandle) -> &Recorder {
+    &app.state::<AppState>().inner().recorder
+}
+
 impl Recorder {
     pub fn new() -> Self {
         Self {
@@ -153,10 +181,13 @@ impl Recorder {
                     hotkey: String::new(),
                     hotkey_ok: false,
                     action: None,
+                    warning: None,
                 },
                 generation: 0,
+                retries: 0,
                 pipeline: None,
             }),
+            lifecycle: Mutex::new(()),
             saving: AtomicBool::new(false),
             #[cfg(target_os = "linux")]
             pending_game: Mutex::new(None),
@@ -191,18 +222,34 @@ impl Recorder {
             if inner.session.is_some() || inner.status.state == "starting" {
                 return;
             }
-            inner.generation += 1;
-            inner.status.state = "starting".into();
-            inner.status.error = None;
-            inner.status.detail = None;
-            inner.status.action = None;
-            inner.generation
+            inner.retries = 0;
+            Self::mark_starting(&mut inner)
         };
         self.emit(app);
+        Self::spawn_start(app, generation, Duration::ZERO);
+    }
+
+    fn mark_starting(inner: &mut Inner) -> u64 {
+        inner.generation += 1;
+        inner.status.state = "starting".into();
+        inner.status.error = None;
+        inner.status.detail = None;
+        inner.status.action = None;
+        inner.status.warning = None;
+        inner.status.since = None;
+        inner.generation
+    }
+
+    fn spawn_start(app: &AppHandle, generation: u64, delay: Duration) {
         let app = app.clone();
         std::thread::spawn(move || {
+            std::thread::sleep(delay);
+            let rec = recorder(&app);
+            let _lifecycle = rec.lifecycle.lock().unwrap();
+            if rec.inner.lock().unwrap().generation != generation {
+                return;
+            }
             let state = app.state::<AppState>();
-            let rec = &state.recorder;
             let cfg = state.config.lock().unwrap().clone();
             let result = rec.create_session(&app, &state, &cfg);
             let mut inner = rec.inner.lock().unwrap();
@@ -228,9 +275,12 @@ impl Recorder {
                     inner.status.error = Some(e);
                 }
             }
+            let recording = inner.session.is_some();
             drop(inner);
             rec.emit(&app);
-            rec.watch_health(&app, generation);
+            if recording {
+                rec.watch_health(&app, generation);
+            }
         });
     }
 
@@ -266,7 +316,7 @@ impl Recorder {
                 let session = ffmpeg::FfmpegSession::start(&ffmpeg, &pipeline, cfg, &state.cache_dir.join("buffer"))?;
                 let mut detail = pipeline.describe();
                 if util::is_wayland() {
-                    detail.push_str(" — no Wayland o x11grab só enxerga janelas XWayland");
+                    detail.push_str(", e no Wayland o x11grab só enxerga janelas XWayland");
                 }
                 Ok((Session::Ffmpeg(session), "ffmpeg".into(), detail))
             }
@@ -284,54 +334,87 @@ impl Recorder {
                         Err(e) => emit_error(&app, format!("Não consegui mover o clipe: {e}")),
                     }
                 });
-                let session = gsr::GsrSession::start(&cmd, cfg, &state.cache_dir.join("gsr"), on_saved)?;
-                let detail = format!("{} · captura {}", cmd.describe(), session.target);
+                // Pasta escondida dentro da de clipes: o Flatpak do gsr enxerga os Vídeos,
+                // e mover dali para o lugar final é só um rename no mesmo disco.
+                let tmp_dir = cfg.clips_dir.join(".medalha-replay");
+                let session = gsr::GsrSession::start(&cmd, cfg, &tmp_dir, on_saved)?;
+                let detail = format!("{}, captura {}", cmd.describe(), session.target);
                 Ok((Session::Gsr(session), "gpu-screen-recorder".into(), detail))
             }
         }
     }
 
+    /// Acompanha a sessão; se o processo de captura morrer sozinho, tenta religar.
     fn watch_health(&self, app: &AppHandle, generation: u64) {
         let app = app.clone();
+        let started = Instant::now();
+        let mut tick = 0u64;
         std::thread::spawn(move || loop {
             std::thread::sleep(Duration::from_secs(1));
-            let state = app.state::<AppState>();
-            let rec = &state.recorder;
+            tick += 1;
+            let rec = recorder(&app);
             let mut inner = rec.inner.lock().unwrap();
             if inner.generation != generation {
                 return;
             }
-            let Some(err) = inner.session.as_mut().and_then(Session::poll_exit) else {
-                if inner.session.is_none() {
-                    return;
+            if started.elapsed() >= STABLE_AFTER {
+                inner.retries = 0;
+            }
+            let Some(session) = inner.session.as_mut() else { return };
+            let Some(err) = session.poll_exit() else {
+                if tick % 10 == 0 {
+                    let warning = session.performance_warning();
+                    if warning != inner.status.warning {
+                        inner.status.warning = warning;
+                        drop(inner);
+                        rec.emit(&app);
+                    }
                 }
                 continue;
             };
+
             let session = inner.session.take();
-            inner.status.state = "error".into();
-            inner.status.error = Some(err);
-            inner.status.since = None;
+            let retry = inner.retries < MAX_RETRIES;
+            let next = if retry {
+                inner.retries += 1;
+                let attempt = inner.retries;
+                Some((Self::mark_starting(&mut inner), Duration::from_secs(2 * attempt as u64)))
+            } else {
+                inner.status.state = "error".into();
+                inner.status.error = Some(err);
+                inner.status.since = None;
+                None
+            };
             drop(inner);
             if let Some(s) = session {
+                let _lifecycle = rec.lifecycle.lock().unwrap();
                 s.stop();
             }
             rec.emit(&app);
+            if let Some((generation, delay)) = next {
+                Self::spawn_start(&app, generation, delay);
+            }
             return;
         });
     }
 
-    /// Bloqueia até o processo de captura encerrar; chame fora da thread principal.
+    /// Pode bloquear até o processo de captura encerrar; chame fora da thread principal.
     pub fn stop(&self, app: &AppHandle) {
         let session = {
             let mut inner = self.inner.lock().unwrap();
             inner.generation += 1;
+            inner.retries = 0;
             inner.status.state = "idle".into();
             inner.status.error = None;
             inner.status.action = None;
+            inner.status.warning = None;
             inner.status.since = None;
             inner.session.take()
         };
+        // Sem sessão não há o que esperar: um start em andamento se cancela sozinho
+        // ao ver a geração nova (e o app não trava ao sair no meio de um probe).
         if let Some(s) = session {
+            let _lifecycle = self.lifecycle.lock().unwrap();
             s.stop();
         }
         self.emit(app);
@@ -345,14 +428,24 @@ impl Recorder {
         }
     }
 
+    /// Reaplica as configurações. Também tenta de novo depois de um erro.
     pub fn restart(&self, app: &AppHandle) {
-        if self.is_active() {
+        let should = self.is_active() || self.inner.lock().unwrap().status.state == "error";
+        if should {
             self.stop(app);
             self.start(app);
         }
     }
 
+    /// Volta na hora; o trabalho roda numa thread própria porque o atalho global e
+    /// os comandos chegam pela thread da interface, e descobrir o jogo leva um instante.
     pub fn save(&self, app: &AppHandle) {
+        let app = app.clone();
+        std::thread::spawn(move || recorder(&app).save_now(&app));
+    }
+
+    fn save_now(&self, app: &AppHandle) {
+        let game = focused_game(app);
         let mut inner = self.inner.lock().unwrap();
         match inner.session.as_mut() {
             None => {
@@ -366,25 +459,24 @@ impl Recorder {
                 let saver = s.saver.clone();
                 drop(inner);
                 let _ = app.emit("clip-saving", ());
-                let app = app.clone();
-                std::thread::spawn(move || {
-                    let game = focused_game(&app);
-                    let state = app.state::<AppState>();
-                    let cfg = state.config.lock().unwrap().clone();
-                    let result = std::fs::create_dir_all(&cfg.clips_dir)
+                let cfg = app.state::<AppState>().config.lock().unwrap().clone();
+                let result = {
+                    // Segura o stop até o ffmpeg terminar de ler os segmentos.
+                    let _lifecycle = self.lifecycle.lock().unwrap();
+                    std::fs::create_dir_all(&cfg.clips_dir)
                         .map_err(|e| e.to_string())
                         .map(|()| util::unique_path(&cfg.clips_dir, &util::clip_file_name(game.as_deref())))
-                        .and_then(|out| saver.save(&out, cfg.buffer_secs).map(|()| out));
-                    state.recorder.saving.store(false, Ordering::SeqCst);
-                    match result {
-                        Ok(out) => clips::on_clip_saved(&app, out),
-                        Err(e) => emit_error(&app, format!("Falha ao salvar o clipe: {e}")),
-                    }
-                });
+                        .and_then(|out| saver.save(&out, cfg.buffer_secs).map(|()| out))
+                };
+                self.saving.store(false, Ordering::SeqCst);
+                match result {
+                    Ok(out) => clips::on_clip_saved(app, out),
+                    Err(e) => emit_error(app, format!("Falha ao salvar o clipe: {e}")),
+                }
             }
             #[cfg(target_os = "linux")]
             Some(Session::Gsr(s)) => {
-                *self.pending_game.lock().unwrap() = focused_game(app);
+                *self.pending_game.lock().unwrap() = game;
                 let result = s.save();
                 drop(inner);
                 match result {

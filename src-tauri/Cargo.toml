@@ -1,10 +1,10 @@
 [package]
 name = "medalha"
-version = "0.2.1"
+version = "0.2.2"
 description = "Cliente desktop não oficial do Medal com replay buffer para Linux e Windows"
 authors = ["Vasconcelos39"]
 license = "MIT"
-repository = "https://github.com/Vasconcelos39/medalha"
+repository = "https://github.com/Vasconcelos39/Medalha"
 edition = "2021"
 rust-version = "1.77"
 
@@ -28,6 +28,11 @@ cpal = "0.15"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# Mesmas versões que o Tauri usa: o layout dos webviews no Linux mexe direto no GTK.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+webkit2gtk = "2.0"
 
 [profile.release]
 codegen-units = 1

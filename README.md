@@ -1,138 +1,92 @@
 # Medalha
 
-Cliente desktop **não oficial** do [Medal](https://medal.tv) para **Linux e Windows**, escrito em Rust ([Tauri 2](https://tauri.app)).
+Cliente desktop não oficial do [Medal](https://medal.tv) para Linux e Windows, feito em Rust com [Tauri 2](https://tauri.app).
 
-- **Aba Medal**: o medal.tv embutido, com login persistente (feed, perfil, clipes na nuvem).
-- **Aba Clipes**: biblioteca dos seus clipes locais, com miniaturas, player, filtro por jogo, renomear, mostrar na pasta e lixeira.
-- **Replay buffer**: grava em segundo plano e, ao apertar o atalho (padrão `F8`), salva os últimos N segundos. Funciona no **Windows**, no **X11** e no **Wayland**.
-- **Cortar clipes**: no player, marque o início e o fim (arrastando as alças ou com `I` / `O`) e salve o trecho como um clipe novo, sem reencodar.
-- **Nome do jogo**: o clipe é salvo com o nome da janela em foco, ex. `Elden Ring_2026-10-23_21-00-00.mp4`.
-- **Iniciar com o sistema** (minimizado na bandeja) e **som ao salvar**, nas configurações.
+Tem duas abas. A primeira é o medal.tv embutido, com login salvo. A segunda é a biblioteca dos clipes gravados no computador, com miniaturas, player, corte, filtro por jogo, renomear e lixeira.
 
-> O Medalha não é afiliado ao Medal.tv. O Medal não oferece API pública de upload, e o site não aceita envio de vídeos pelo navegador. Por isso o upload automático para a nuvem do Medal não é possível hoje: os clipes ficam na sua pasta local (padrão `Vídeos/Medalha`).
+Os clipes saem de um replay buffer: o Medalha grava a tela continuamente e, quando você aperta o atalho (`F8` por padrão), salva os últimos segundos.
 
-## Como a gravação funciona
-
-| Sistema | Gravador | Captura | Áudio |
-| --- | --- | --- | --- |
-| Windows 10/11 | ffmpeg | `ddagrab` (Desktop Duplication), frames direto na GPU com NVENC/AMF | WASAPI loopback (som do sistema) + microfone, capturados em Rust |
-| Linux X11 | gpu-screen-recorder, ou ffmpeg | KMS/X11, ou `x11grab` | PipeWire/PulseAudio |
-| Linux Wayland | gpu-screen-recorder | xdg-desktop-portal (GNOME, KDE, Hyprland…) ou KMS | PipeWire/PulseAudio |
-
-No modo **Automático**:
-- **Linux**: usa o `gpu-screen-recorder` se ele estiver instalado. Sem ele, cai para o ffmpeg no X11. No Wayland ele é obrigatório.
-- **Windows**: testa os encoders de GPU (NVENC → AMF → QSV) e usa o primeiro que funcionar, senão a CPU (x264).
-
-Com o ffmpeg, o buffer é uma sequência de segmentos de 2 s reaproveitados em ciclo. Salvar um clipe só junta os segmentos num MP4, sem reencodar, então leva menos de um segundo.
+O Medalha não tem relação com a Medal.tv. O Medal não oferece API pública de upload e o site não aceita envio de vídeos pelo navegador, então os clipes ficam só na pasta local (`Vídeos/Medalha`).
 
 ## Instalação
 
-Baixe o instalador da última versão em [Releases](https://github.com/Vasconcelos39/medalha/releases/latest):
+Baixe da página de [releases](https://github.com/Vasconcelos39/Medalha/releases/latest):
 
-| Sistema | Arquivo |
-| --- | --- |
-| Windows 10/11 | `Medalha_X.Y.Z_x64-setup.exe` |
-| Debian, Ubuntu, Mint, Pop!_OS | `Medalha_X.Y.Z_amd64.deb` (`sudo apt install ./Medalha_*.deb`) |
-| Fedora, openSUSE | `Medalha-X.Y.Z-1.x86_64.rpm` (no Fedora o `ffmpeg` vem do [RPM Fusion](https://rpmfusion.org)) |
-| Qualquer distro | `Medalha_X.Y.Z_amd64.AppImage` (`chmod +x` e rode) |
+- Windows 10/11: `Medalha_X.Y.Z_x64-setup.exe`
+- Debian, Ubuntu, Mint, Pop!_OS: `Medalha_X.Y.Z_amd64.deb` (`sudo apt install ./Medalha_*.deb`)
+- Fedora, openSUSE: `Medalha-X.Y.Z-1.x86_64.rpm` (no Fedora o `ffmpeg` vem do [RPM Fusion](https://rpmfusion.org))
+- Qualquer distro: `Medalha_X.Y.Z_amd64.AppImage`
 
-Builds de cada commit ficam em [Actions](https://github.com/Vasconcelos39/medalha/actions).
-
-### Publicar uma versão
-
-Atualize a versão em `src-tauri/Cargo.toml` e `src-tauri/tauri.conf.json`, escreva a seção `## vX.Y.Z` no `CHANGELOG.md` e envie uma tag:
-
-```bash
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-O GitHub Actions compila no Windows e no Linux e publica a release com os instaladores e as notas do CHANGELOG.
-
-### Dependências
-
-**Windows**: o WebView2 já vem no Windows 11. Instale o ffmpeg:
+No Windows, instale também o ffmpeg:
 
 ```powershell
 winget install Gyan.FFmpeg
 ```
 
-**Linux** (Debian/Ubuntu):
-
-```bash
-sudo apt install ffmpeg libwebkit2gtk-4.1-0 gstreamer1.0-libav gstreamer1.0-plugins-good
-```
-
-Para Wayland (e para gravar melhor também no X11), instale o [gpu-screen-recorder](https://git.dec05eba.com/gpu-screen-recorder/about/). Se o Medalha não o encontrar, a aba Clipes mostra um botão que instala o Flatpak do Flathub com um clique. Ele também está no AUR e em vários repositórios:
+No Linux, o `.deb` já puxa o ffmpeg e o GStreamer (usado pelo player). Para gravar no Wayland é preciso o [gpu-screen-recorder](https://git.dec05eba.com/gpu-screen-recorder/about/). Se ele não estiver instalado, a aba Clipes oferece instalar o Flatpak do Flathub. Também dá para instalar na mão:
 
 ```bash
 flatpak install flathub com.dec05eba.gpu_screen_recorder
 ```
 
-`gstreamer1.0-libav` é necessário para o player embutido tocar H.264 no WebKitGTK.
+## Como a gravação funciona
 
-## Nome do jogo
+| Sistema | Gravador | Áudio |
+| --- | --- | --- |
+| Windows | ffmpeg com `ddagrab` e encoder da GPU (NVENC, AMF ou Quick Sync), ou x264 | loopback WASAPI e microfone, capturados pelo próprio Medalha |
+| Linux X11 | gpu-screen-recorder ou ffmpeg com `x11grab` | PipeWire/PulseAudio |
+| Linux Wayland | gpu-screen-recorder, pelo portal do desktop ou KMS | PipeWire/PulseAudio |
 
-Ao salvar, o Medalha lê o título da janela em foco:
+Com o ffmpeg, o buffer é uma fila de segmentos de 2 segundos reaproveitados em ciclo. Salvar só junta os segmentos num MP4, sem reencodar, e leva menos de um segundo. Se a captura cair no meio do jogo (troca de resolução, UAC, tela bloqueada), o Medalha religa sozinho.
 
-- **Windows**: qualquer jogo.
-- **Linux X11**, **Hyprland** e **Sway**: qualquer jogo (usa `xprop`, `hyprctl` ou `swaymsg`).
-- **GNOME/KDE no Wayland**: só jogos que rodam via XWayland, que são a maioria (Proton/Wine e boa parte dos nativos). Os outros ficam com o nome `Medalha_…`.
-
-Navegadores, Discord e Steam viram só o nome do app. Dá para desligar em *Configurações → Nomear clipes com o jogo em foco*.
+O nome do clipe vem da janela em foco na hora de salvar, por exemplo `Elden Ring_2026-10-23_21-00-00.mp4`. Funciona no Windows, no X11, no Hyprland, no Sway e, no GNOME/KDE com Wayland, com jogos que rodam via XWayland (Proton/Wine e boa parte dos nativos).
 
 ## Atalho no Wayland
 
-No Wayland, um programa comum não consegue registrar atalhos globais. Crie um atalho no seu ambiente (GNOME: *Configurações → Teclado → Atalhos personalizados*; KDE: *Atalhos personalizados*) que rode:
+No Wayland, o atalho global só funciona quando a janela em foco é XWayland. Para funcionar sempre, crie um atalho no sistema (GNOME: Configurações → Teclado → Atalhos personalizados; KDE: Configurações do sistema → Atalhos) que rode:
 
 ```bash
 medalha --save-clip
 ```
 
-Outros comandos que você pode associar a atalhos ou scripts:
+Outros comandos, que vão para a instância já aberta:
 
-| Comando | Ação |
+| Comando | O que faz |
 | --- | --- |
 | `medalha --save-clip` | salva o replay agora |
-| `medalha --toggle` | liga/desliga o buffer |
-| `medalha --start` / `--stop` | liga / desliga o buffer |
+| `medalha --toggle` | liga ou desliga o buffer |
+| `medalha --start`, `medalha --stop` | liga, desliga |
 | `medalha --show` | mostra a janela |
-| `medalha --hidden` | inicia minimizado na bandeja |
-
-Os comandos são enviados para a instância que já está aberta.
+| `medalha --hidden` | abre minimizado na bandeja |
 
 ## Compilando
 
-Pré-requisitos: [Rust](https://rustup.rs) e as [dependências do Tauri](https://tauri.app/start/prerequisites/). No Windows isso é o VS Build Tools com C++; no Linux, `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev`.
+Precisa do [Rust](https://rustup.rs) e das [dependências do Tauri](https://tauri.app/start/prerequisites/): no Windows, o VS Build Tools com C++; no Linux, `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev`.
 
 ```bash
 cd src-tauri
-cargo run            # desenvolvimento
+cargo run
+```
+
+Para gerar os instaladores:
+
+```bash
 cargo install tauri-cli --version "^2" --locked
-cargo tauri build    # instaladores (.exe / .deb / .rpm / .AppImage)
+cargo tauri build
 ```
 
-A interface é HTML/CSS/JS puro em `ui/` (sem npm nem bundler).
+A interface é HTML, CSS e JavaScript sem build, na pasta `ui/`. O código Rust fica em `src-tauri/src/`: `recorder/` cuida do replay buffer, `clips.rs` da biblioteca, `medal.rs` do webview do site e `main.rs` da janela, da bandeja e dos comandos.
 
-## Estrutura
+## Publicando uma versão
 
+Atualize a versão em `src-tauri/Cargo.toml` e `src-tauri/tauri.conf.json`, escreva a seção `## vX.Y.Z` no `CHANGELOG.md` e envie a tag:
+
+```bash
+git tag v0.2.2
+git push origin v0.2.2
 ```
-src-tauri/src/
-  main.rs            janela, abas, bandeja, atalhos, comandos da UI, CLI
-  medal.rs           webview do medal.tv
-  clips.rs           biblioteca local (miniaturas, corte, renomear, lixeira, watcher)
-  game.rs            nome da janela em foco (Windows, X11, Hyprland, Sway)
-  autostart.rs       iniciar com o sistema (registro Run / ~/.config/autostart)
-  sound.rs           som de confirmação ao salvar
-  media.rs           descoberta do ffmpeg e escolha de captura/encoder
-  config.rs          configurações (JSON na pasta de config do sistema)
-  recorder/
-    mod.rs           ciclo de vida do replay buffer
-    ffmpeg.rs        buffer segmentado com ffmpeg (Windows/X11)
-    gsr.rs           gpu-screen-recorder (Linux, X11 e Wayland)
-    audio_win.rs     loopback WASAPI + microfone → ffmpeg
-ui/                  interface (abas, clipes, configurações)
-```
+
+O GitHub Actions compila nas duas plataformas e publica a release com os instaladores e as notas do CHANGELOG.
 
 ## Licença
 

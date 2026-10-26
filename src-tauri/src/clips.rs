@@ -1,6 +1,6 @@
 //! Biblioteca local de clipes: listagem, miniaturas, renomear, lixeira.
 
-use crate::util::{command, run_with_timeout, unique_path};
+use crate::util::{command, partial_path, run_with_timeout, unique_path};
 use crate::{media, sound, AppState};
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
@@ -127,7 +127,9 @@ pub fn rename(path: &Path, new_name: &str) -> Result<PathBuf, String> {
     if target == path {
         return Ok(target);
     }
-    if target.exists() {
+    // No Windows, mudar só maiúsculas/minúsculas aponta para o mesmo arquivo.
+    let same_file = target.canonicalize().ok().is_some_and(|t| path.canonicalize().ok() == Some(t));
+    if target.exists() && !same_file {
         return Err("Já existe um clipe com esse nome.".into());
     }
     std::fs::rename(path, &target).map_err(|e| e.to_string())?;
@@ -145,6 +147,13 @@ pub fn trim(ffmpeg: &Path, clip: &Path, start: f64, end: f64) -> Result<ClipInfo
     let stem = clip.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let ext = clip.extension().and_then(|e| e.to_str()).unwrap_or("mp4").to_ascii_lowercase();
     let out = unique_path(dir, &format!("{stem} (corte).{ext}"));
+    let partial = partial_path(&out);
+    let muxer = match ext.as_str() {
+        "mkv" => "matroska",
+        "webm" => "webm",
+        "mov" => "mov",
+        _ => "mp4",
+    };
 
     let mut cmd = command(ffmpeg);
     cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-ss"])
@@ -154,17 +163,17 @@ pub fn trim(ffmpeg: &Path, clip: &Path, start: f64, end: f64) -> Result<ClipInfo
         .arg("-t")
         .arg(format!("{:.3}", end - start))
         .args(["-map", "0", "-c", "copy", "-avoid_negative_ts", "make_zero"]);
-    if ext == "mp4" || ext == "mov" {
+    if muxer == "mp4" || muxer == "mov" {
         cmd.args(["-movflags", "+faststart"]);
     }
-    cmd.arg(&out);
+    cmd.args(["-f", muxer]).arg(&partial);
     let output = run_with_timeout(cmd, Duration::from_secs(120)).ok_or("O ffmpeg demorou demais para cortar o clipe.")?;
-    if output.status.success() && out.metadata().map(|m| m.len() > 0).unwrap_or(false) {
-        info(&out).ok_or_else(|| "O corte foi salvo, mas não consegui lê-lo.".into())
-    } else {
-        let _ = std::fs::remove_file(&out);
-        Err(format!("Falha ao cortar: {}", String::from_utf8_lossy(&output.stderr).trim()))
+    if !output.status.success() || partial.metadata().map(|m| m.len() == 0).unwrap_or(true) {
+        let _ = std::fs::remove_file(&partial);
+        return Err(format!("Falha ao cortar: {}", String::from_utf8_lossy(&output.stderr).trim()));
     }
+    std::fs::rename(&partial, &out).map_err(|e| e.to_string())?;
+    info(&out).ok_or_else(|| "O corte foi salvo, mas não consegui lê-lo.".into())
 }
 
 pub fn trash(path: &Path) -> Result<(), String> {
