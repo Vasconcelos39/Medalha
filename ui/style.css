@@ -103,7 +103,18 @@ kbd {
   display: flex; align-items: center; gap: 10px;
   padding: 16px 24px 12px; background: var(--bg);
 }
-.toolbar h1 { font-size: 18px; font-weight: 600; margin: 0 6px 0 0; }
+.toolbar h1 { font-size: 18px; font-weight: 600; margin: 0; }
+.info { position: relative; margin-right: 6px; }
+.info .icon-btn[aria-expanded="true"] { background: var(--surface-3); color: var(--text); }
+.info-pop {
+  position: absolute; top: calc(100% + 6px); left: -8px; z-index: 3; width: 340px;
+  padding: 12px 14px; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  color: var(--muted); font-size: 13px; line-height: 1.5;
+}
+.info-pop p { margin: 0 0 8px; }
+.info-pop strong { color: var(--text); font-weight: 600; }
+.info-pop .ghost { margin-top: 4px; }
 #search { width: 240px; background: var(--surface); }
 #game-filter { max-width: 220px; background: var(--surface); }
 .no-match { margin: 40px 24px; text-align: center; color: var(--muted); }

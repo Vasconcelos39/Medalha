@@ -64,6 +64,16 @@
   <main id="view-clips" class="view" hidden>
     <div class="toolbar">
       <h1>Clipes</h1>
+      <div class="info">
+        <button class="icon-btn" id="info-btn" title="Sobre os clipes" aria-expanded="false" aria-controls="info-pop">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+        </button>
+        <div class="info-pop" id="info-pop" role="dialog" aria-label="Sobre os clipes" hidden>
+          <p><strong>Esta aba mostra os clipes salvos neste computador.</strong> O Medalha não envia nada para a nuvem do Medal: o Medal não aceita envio de clipes por outros programas.</p>
+          <p>Para ver seus clipes da nuvem, inclusive os privados, entre na sua conta na aba Medal e abra a sua biblioteca.</p>
+          <button class="ghost" id="info-medal">Ir para a aba Medal</button>
+        </div>
+      </div>
       <input type="search" id="search" placeholder="Buscar clipes" autocomplete="off">
       <select id="game-filter" title="Filtrar por jogo" hidden></select>
       <div class="spacer"></div>

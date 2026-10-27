@@ -10,6 +10,7 @@
   - `.deb` e `.rpm`: o pacote é instalado pedindo a senha do sistema, e o Medalha reabre.
   - Windows: o instalador abre depois que o Medalha fecha.
   - Dá para desligar a busca ou procurar na hora em Configurações → Sistema.
+- Botão (i) na aba Clipes: explica que os clipes ficam no computador e que os da nuvem do Medal, inclusive os privados, aparecem na aba Medal, com a sua conta.
 - Fechar a janela com "Fechar para a bandeja" desligado agora encerra o app de vez.
 
 ## v0.2.2

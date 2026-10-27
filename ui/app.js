@@ -540,6 +540,31 @@ $('#game-filter').addEventListener('change', (e) => {
 });
 $('#open-dir').addEventListener('click', () => invoke('open_clips_dir'));
 
+// Balão (i) da aba Clipes
+
+const infoBtn = $('#info-btn');
+const infoPop = $('#info-pop');
+
+function setInfo(open) {
+  infoPop.hidden = !open;
+  infoBtn.setAttribute('aria-expanded', String(open));
+}
+
+infoBtn.addEventListener('click', () => setInfo(infoPop.hidden));
+$('#info-medal').addEventListener('click', () => {
+  setInfo(false);
+  setTab('medal');
+});
+document.addEventListener('click', (e) => {
+  if (!infoPop.hidden && !e.target.closest('.info')) setInfo(false);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !infoPop.hidden) {
+    setInfo(false);
+    infoBtn.focus();
+  }
+});
+
 // Configurações
 
 const form = $('#settings-form');
