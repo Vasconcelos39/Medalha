@@ -10,8 +10,14 @@ on:
 permissions:
   contents: read
 
+# Um push novo no mesmo branch/tag cancela a execução anterior.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -30,9 +36,13 @@ jobs:
       - name: Dependências do Linux
         if: runner.os == 'Linux'
         working-directory: .
+        timeout-minutes: 15
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        # O apt dos runners às vezes fica esperando a trava do unattended-upgrades.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf \
+          sudo apt-get -o DPkg::Lock::Timeout=300 update
+          sudo apt-get -o DPkg::Lock::Timeout=300 install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf \
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav \
             libgtk-layer-shell0
 
