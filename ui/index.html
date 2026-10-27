@@ -18,28 +18,6 @@
       <span>Medalha</span>
     </div>
 
-    <nav class="tabs" role="tablist">
-      <button class="tab" role="tab" data-tab="medal" aria-selected="true">Medal</button>
-      <button class="tab" role="tab" data-tab="clips" aria-selected="false">
-        Clipes <span class="count" id="clip-count"></span>
-      </button>
-    </nav>
-
-    <div class="webnav" id="webnav">
-      <button class="icon-btn" data-nav="back" title="Voltar">
-        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
-      </button>
-      <button class="icon-btn" data-nav="forward" title="Avançar">
-        <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
-      </button>
-      <button class="icon-btn" data-nav="reload" title="Recarregar">
-        <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
-      </button>
-      <button class="icon-btn" data-nav="home" title="Início do Medal">
-        <svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7M6 10v10h12V10"/></svg>
-      </button>
-    </div>
-
     <div class="spacer"></div>
 
     <button class="status" id="status" title="Ligar ou desligar o buffer">
@@ -56,22 +34,17 @@
     </button>
   </header>
 
-  <!-- A aba Medal é um webview nativo posicionado pelo Rust sobre esta área. -->
-  <main id="view-medal" class="view">
-    <div class="placeholder">Carregando medal.tv…</div>
-  </main>
-
-  <main id="view-clips" class="view" hidden>
+  <main id="view-clips" class="view">
     <div class="toolbar">
-      <h1>Clipes</h1>
+      <h1>Clipes <span class="count" id="clip-count"></span></h1>
       <div class="info">
         <button class="icon-btn" id="info-btn" title="Sobre os clipes" aria-expanded="false" aria-controls="info-pop">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
         </button>
         <div class="info-pop" id="info-pop" role="dialog" aria-label="Sobre os clipes" hidden>
-          <p><strong>Esta aba mostra os clipes salvos neste computador.</strong> O Medalha não envia nada para a nuvem do Medal: o Medal não aceita envio de clipes por outros programas.</p>
-          <p>Para ver seus clipes da nuvem, inclusive os privados, entre na sua conta na aba Medal e abra a sua biblioteca.</p>
-          <button class="ghost" id="info-medal">Ir para a aba Medal</button>
+          <p><strong>Aqui ficam os clipes salvos neste computador.</strong> O Medalha não envia nada para a nuvem do Medal: o Medal não aceita envio de clipes por outros programas.</p>
+          <p>Seus clipes da nuvem, inclusive os privados, ficam no site do Medal: entre na sua conta e abra a sua biblioteca.</p>
+          <button class="ghost" id="info-medal">Abrir medal.tv no navegador</button>
         </div>
       </div>
       <input type="search" id="search" placeholder="Buscar clipes" autocomplete="off">

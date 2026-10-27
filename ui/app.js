@@ -7,7 +7,6 @@ const $ = (sel) => document.querySelector(sel);
 const IS_WINDOWS = navigator.userAgent.includes('Windows');
 
 const state = {
-  tab: 'medal',
   clips: [],
   meta: new Map(), // path -> { thumb, duration }
   status: null,
@@ -72,41 +71,6 @@ function debounce(fn, ms) {
     id = setTimeout(() => fn(...args), ms);
   };
 }
-
-// Abas
-
-function setTab(tab) {
-  state.tab = tab;
-  for (const b of document.querySelectorAll('.tab')) {
-    b.setAttribute('aria-selected', String(b.dataset.tab === tab));
-  }
-  $('#view-medal').hidden = tab !== 'medal';
-  $('#view-clips').hidden = tab !== 'clips';
-  $('#webnav').hidden = tab !== 'medal';
-  invoke('set_medal_visible', { visible: tab === 'medal' && !anyModalOpen() });
-  if (tab === 'clips') refreshClips();
-}
-
-function anyModalOpen() {
-  return [...document.querySelectorAll('dialog')].some((d) => d.open);
-}
-
-/** O webview do Medal fica por cima da página, então some enquanto há modal aberto. */
-function openModal(dialog) {
-  invoke('set_medal_visible', { visible: false });
-  dialog.showModal();
-}
-
-for (const d of document.querySelectorAll('dialog')) {
-  d.addEventListener('close', () => {
-    if (state.tab === 'medal' && !anyModalOpen()) invoke('set_medal_visible', { visible: true });
-  });
-}
-
-document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
-document.querySelectorAll('[data-nav]').forEach((b) =>
-  b.addEventListener('click', () => invoke('medal_nav', { action: b.dataset.nav })),
-);
 
 // Status do gravador
 
@@ -189,8 +153,8 @@ async function installGsr() {
 }
 
 $('#status').addEventListener('click', () => {
-  // Quando o erro tem correção (instalar o gsr), mostra o aviso com o botão em vez de tentar de novo.
-  if (state.status?.state === 'error' && state.status.action) return setTab('clips');
+  // Quando o erro tem correção (instalar o gsr), o aviso com o botão já está na tela; não tenta de novo.
+  if (state.status?.state === 'error' && state.status.action) return;
   const s = state.status?.state;
   invoke(s === 'recording' || s === 'starting' ? 'stop_buffer' : 'start_buffer');
 });
@@ -347,7 +311,7 @@ function play(clip) {
   renderTrim();
   video.src = convertFileSrc(clip.path);
   $('#player-open').onclick = () => invoke('open_clip', { path: clip.path });
-  openModal($('#player'));
+  $('#player').showModal();
   video.play().catch(() => {});
 }
 
@@ -495,7 +459,7 @@ function ask({ title, text = '', value = null, ok = 'OK', danger = false }) {
       () => resolve(dialog.returnValue === 'ok' ? (value === null ? true : input.value) : null),
       { once: true },
     );
-    openModal(dialog);
+    dialog.showModal();
     if (value !== null) {
       input.focus();
       input.select();
@@ -553,7 +517,7 @@ function setInfo(open) {
 infoBtn.addEventListener('click', () => setInfo(infoPop.hidden));
 $('#info-medal').addEventListener('click', () => {
   setInfo(false);
-  setTab('medal');
+  invoke('open_medal');
 });
 document.addEventListener('click', (e) => {
   if (!infoPop.hidden && !e.target.closest('.info')) setInfo(false);
@@ -599,7 +563,7 @@ async function openSettings() {
   const hint = $('#hotkey-hint');
   hint.hidden = state.status?.hotkeyOk !== false;
   hint.textContent = 'Este atalho não pôde ser registrado. No Wayland use um atalho do sistema rodando "medalha --save-clip".';
-  openModal($('#settings'));
+  $('#settings').showModal();
   renderDiagnostics();
 }
 
@@ -641,7 +605,7 @@ form.addEventListener('submit', async (e) => {
     $('#settings').close();
     toast('Configurações salvas', 'ok');
     renderStatus();
-    if (state.tab === 'clips') refreshClips();
+    refreshClips();
   } catch (err) {
     toast(String(err), 'error');
   }
@@ -718,7 +682,7 @@ function openUpdate() {
   $('#update-go').textContent = update.method === 'manual' ? 'Abrir página da versão' : 'Atualizar agora';
   $('#update-go').disabled = installing;
   if (!installing) setUpdateStatus(UPDATE_HINTS[update.method] ?? '');
-  openModal($('#update'));
+  $('#update').showModal();
 }
 
 $('#update-btn').addEventListener('click', openUpdate);
@@ -773,7 +737,7 @@ listen('recorder-status', (e) => {
 listen('clip-saving', () => flashStatus('Salvando clipe…'));
 listen('clip-saved', (e) => {
   flashStatus('Clipe salvo');
-  if (state.tab === 'clips') toast(`Clipe salvo: ${e.payload.name}`, 'ok');
+  toast(`Clipe salvo: ${e.payload.name}`, 'ok');
   refreshClips();
 });
 listen('clip-error', (e) => {
@@ -791,5 +755,4 @@ listen('clips-changed', () => refreshSoon());
   renderUpdate();
   renderStatus();
   refreshClips();
-  setTab('medal');
 })();

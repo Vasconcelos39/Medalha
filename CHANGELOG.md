@@ -1,9 +1,10 @@
 # Mudanças
 
-## v0.3.2
+## v0.4.0
 
-Proteções depois de um travamento do sistema num PC com Bazzite (KDE Plasma, Wayland) com o buffer ligado. A causa ainda está sendo investigada.
+Num PC com Bazzite (KDE Plasma, Wayland), a tela ficou rosa e o sistema travou com o buffer ligado, e foi preciso reiniciar. A causa ainda está sendo investigada. Esta versão tira a parte mais pesada do app e traz proteções e um log para descobrir o que houve.
 
+- A aba Medal saiu: o app agora é só a biblioteca de clipes e a gravação. O site do Medal, com os clipes da nuvem, abre no navegador pelo botão (i) ao lado do título "Clipes". Com isso o Medalha usa um navegador embutido a menos, fica mais leve e, no Linux, não precisa mais do ajuste de layout do GTK.
 - Linux: se o Medalha terminar de repente com o buffer ligado (o computador travou, faltou luz, o app foi morto), na próxima abertura o buffer não liga sozinho. Um aviso explica o motivo, e um clique em "Buffer desligado" liga do mesmo jeito. Desligar o computador ou sair da sessão normalmente não conta.
 - Novo arquivo `medalha.log` na pasta de cache, com o que o Medalha fez: buffer ligado e desligado, o comando do gpu-screen-recorder e as mensagens dele, clipes salvos, o card. Cada linha vai para o disco na hora, então sobrevive a um travamento. O caminho aparece em Configurações → Avançado.
 - `medalha --no-buffer` abre o app sem ligar o buffer, mesmo com "Ligar o buffer ao abrir" marcado.

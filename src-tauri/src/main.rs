@@ -7,7 +7,6 @@ mod game;
 mod guard;
 mod logfile;
 mod media;
-mod medal;
 mod overlay;
 mod recorder;
 mod sound;
@@ -21,8 +20,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::webview::WebviewBuilder;
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, RunEvent, WebviewUrl, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 pub struct AppState {
@@ -229,14 +227,10 @@ fn suspend_hotkey(app: AppHandle, suspended: bool) {
     }
 }
 
+/// Os clipes da nuvem (inclusive os privados) ficam no site, aberto no navegador.
 #[tauri::command]
-fn set_medal_visible(app: AppHandle, visible: bool) {
-    medal::set_visible(&app, visible);
-}
-
-#[tauri::command]
-fn medal_nav(app: AppHandle, action: String) -> CmdResult<()> {
-    medal::navigate(&app, &action)
+fn open_medal() {
+    clips::open_path(Path::new("https://medal.tv/"));
 }
 
 #[tauri::command]
@@ -316,7 +310,7 @@ fn register_hotkey(app: &AppHandle, hotkey: &str) {
 }
 
 fn show_window(app: &AppHandle) {
-    if let Some(window) = app.get_window("main") {
+    if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
@@ -350,7 +344,7 @@ fn handle_cli(app: &AppHandle, args: &[String], second_instance: bool) {
 }
 
 fn build_window(app: &tauri::App, hidden: bool) -> tauri::Result<()> {
-    let mut builder = tauri::window::WindowBuilder::new(app, "main")
+    let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title("Medalha")
         .inner_size(1280.0, 820.0)
         .min_inner_size(960.0, 600.0)
@@ -359,23 +353,10 @@ fn build_window(app: &tauri::App, hidden: bool) -> tauri::Result<()> {
         builder = builder.icon(icon.clone())?;
     }
     let window = builder.build()?;
-    let size = window.inner_size()?.to_logical::<f64>(window.scale_factor()?);
-    window.add_child(
-        WebviewBuilder::new(medal::UI_LABEL, WebviewUrl::App("index.html".into())).auto_resize(),
-        LogicalPosition::new(0.0, 0.0),
-        size,
-    )?;
-    window.add_child(
-        medal::builder(),
-        LogicalPosition::new(0.0, medal::HEADER_H),
-        LogicalSize::new(size.width, (size.height - medal::HEADER_H).max(1.0)),
-    )?;
-    medal::set_visible(window.app_handle(), true);
 
     let w = window.clone();
-    window.on_window_event(move |event| match event {
-        WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => medal::layout(&w),
-        WindowEvent::CloseRequested { api, .. } => {
+    window.on_window_event(move |event| {
+        if let WindowEvent::CloseRequested { api, .. } = event {
             let to_tray = w.app_handle().state::<AppState>().config.lock().unwrap().close_to_tray;
             api.prevent_close();
             if to_tray {
@@ -385,7 +366,6 @@ fn build_window(app: &tauri::App, hidden: bool) -> tauri::Result<()> {
                 quit(w.app_handle());
             }
         }
-        _ => {}
     });
     Ok(())
 }
@@ -466,8 +446,7 @@ fn main() {
             install_update,
             open_release_page,
             suspend_hotkey,
-            set_medal_visible,
-            medal_nav,
+            open_medal,
             pick_folder,
             diagnostics,
         ])

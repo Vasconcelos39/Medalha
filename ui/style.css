@@ -1,5 +1,5 @@
 :root {
-  --header-h: 52px; /* igual a medal::HEADER_H no Rust */
+  --header-h: 52px;
   --bg: #0e0f12;
   --surface: #16181c;
   --surface-2: #1d2025;
@@ -48,18 +48,6 @@ kbd {
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-right: 10px; }
 .brand-mark { width: 22px; height: 22px; stroke: none; }
 
-.tabs { display: flex; gap: 2px; }
-.tab {
-  border: 0; background: transparent; color: var(--muted);
-  height: 32px; padding: 0 12px; border-radius: 6px; cursor: pointer; font-weight: 500;
-  display: flex; align-items: center; gap: 6px;
-}
-.tab:hover { color: var(--text); background: var(--surface-2); }
-.tab[aria-selected="true"] { color: var(--text); background: var(--surface-3); }
-.count { font-size: 12px; color: var(--faint); }
-.count:empty { display: none; }
-
-.webnav { display: flex; gap: 0; margin-left: 6px; padding-left: 8px; border-left: 1px solid var(--line); }
 
 .icon-btn {
   width: 32px; height: 32px; display: grid; place-items: center;
@@ -96,7 +84,6 @@ kbd {
 
 /* Conteúdo */
 .view { position: absolute; inset: var(--header-h) 0 0 0; overflow: auto; }
-.placeholder { height: 100%; display: grid; place-items: center; color: var(--faint); }
 
 .toolbar {
   position: sticky; top: 0; z-index: 2;
@@ -104,6 +91,8 @@ kbd {
   padding: 16px 24px 12px; background: var(--bg);
 }
 .toolbar h1 { font-size: 18px; font-weight: 600; margin: 0; }
+.count { font-size: 14px; font-weight: 400; color: var(--faint); margin-left: 2px; }
+.count:empty { display: none; }
 .info { position: relative; margin-right: 6px; }
 .info .icon-btn[aria-expanded="true"] { background: var(--surface-3); color: var(--text); }
 .info-pop {

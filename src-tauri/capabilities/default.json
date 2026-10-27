@@ -1,8 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissões da interface local (o webview do medal.tv é remoto e não recebe IPC).",
+  "description": "Permissões da interface local.",
   "windows": ["main"],
-  "webviews": ["ui"],
   "permissions": ["core:default"]
 }
