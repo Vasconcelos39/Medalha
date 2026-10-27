@@ -136,7 +136,11 @@ pub struct Recorder {
 }
 
 pub fn emit_error(app: &AppHandle, message: impl Into<String>) {
-    let _ = app.emit("clip-error", message.into());
+    let message = message.into();
+    let _ = app.emit("clip-error", message.clone());
+    // Quem aperta o atalho está no jogo e não vê a janela do Medalha.
+    let app = app.clone();
+    std::thread::spawn(move || clips::alert(&app, "Clipe não salvo", &message, "error"));
 }
 
 #[cfg(target_os = "linux")]

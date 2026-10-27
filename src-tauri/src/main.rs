@@ -6,8 +6,10 @@ mod config;
 mod game;
 mod media;
 mod medal;
+mod overlay;
 mod recorder;
 mod sound;
+mod update;
 mod util;
 
 use config::Config;
@@ -26,6 +28,8 @@ pub struct AppState {
     pub config_path: PathBuf,
     pub cache_dir: PathBuf,
     pub recorder: Recorder,
+    /// Última versão nova encontrada no GitHub.
+    pub update: Mutex<Option<update::UpdateInfo>>,
     watcher: Mutex<Option<notify::RecommendedWatcher>>,
 }
 
@@ -173,6 +177,37 @@ async fn install_gsr(app: AppHandle) -> CmdResult<()> {
     blocking(recorder::install_gsr).await??;
     state(&app).recorder.start(&app);
     Ok(())
+}
+
+#[tauri::command]
+fn get_update(app: AppHandle) -> Option<update::UpdateInfo> {
+    state(&app).update.lock().unwrap().clone()
+}
+
+/// Procura agora (botão nas configurações), mesmo com a busca automática desligada.
+#[tauri::command]
+async fn check_update(app: AppHandle) -> CmdResult<Option<update::UpdateInfo>> {
+    let found = blocking({
+        let app = app.clone();
+        move || update::check(&app)
+    })
+    .await??;
+    *state(&app).update.lock().unwrap() = found.clone();
+    Ok(found)
+}
+
+#[tauri::command]
+fn open_release_page(app: AppHandle) -> CmdResult<()> {
+    let page = state(&app).update.lock().unwrap().as_ref().map(|u| u.page.clone());
+    let page = page.filter(|p| p.starts_with("https://github.com/")).ok_or("Página da versão indisponível.")?;
+    clips::open_path(Path::new(&page));
+    Ok(())
+}
+
+#[tauri::command]
+async fn install_update(app: AppHandle) -> CmdResult<()> {
+    let info = state(&app).update.lock().unwrap().clone().ok_or("Nenhuma atualização encontrada.")?;
+    blocking(move || update::install(&app, &info)).await?
 }
 
 /// Solta o atalho global enquanto o usuário grava um novo nas configurações;
@@ -327,9 +362,12 @@ fn build_window(app: &tauri::App, hidden: bool) -> tauri::Result<()> {
         WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => medal::layout(&w),
         WindowEvent::CloseRequested { api, .. } => {
             let to_tray = w.app_handle().state::<AppState>().config.lock().unwrap().close_to_tray;
+            api.prevent_close();
             if to_tray {
-                api.prevent_close();
                 let _ = w.hide();
+            } else {
+                // Sair de vez: a janela escondida do card manteria o app vivo.
+                quit(w.app_handle());
             }
         }
         _ => {}
@@ -408,6 +446,10 @@ fn main() {
             open_clip,
             open_clips_dir,
             install_gsr,
+            get_update,
+            check_update,
+            install_update,
+            open_release_page,
             suspend_hotkey,
             set_medal_visible,
             medal_nav,
@@ -439,6 +481,7 @@ fn main() {
                 config_path,
                 cache_dir,
                 recorder: Recorder::new(),
+                update: Mutex::new(None),
                 watcher: Mutex::new(None),
             });
 
@@ -451,6 +494,7 @@ fn main() {
                 state(&handle).recorder.start(&handle);
             }
             handle_cli(&handle, &args, false);
+            update::watch(&handle);
             Ok(())
         })
         .build(tauri::generate_context!())

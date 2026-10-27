@@ -651,6 +651,93 @@ hotkeyInput.addEventListener('keydown', (e) => {
   hotkeyInput.blur();
 });
 
+// Atualização
+
+const UPDATE_HINTS = {
+  appimage: 'O AppImage é trocado pelo novo e o Medalha abre de novo sozinho.',
+  deb: 'O sistema vai pedir sua senha para instalar o pacote. Depois o Medalha abre de novo.',
+  rpm: 'O sistema vai pedir sua senha para instalar o pacote. Depois o Medalha abre de novo.',
+  installer: 'O Medalha fecha e o instalador abre.',
+  manual: 'Este jeito de instalar não se atualiza sozinho. Baixe a versão nova na página dela.',
+};
+let update = null;
+let installing = false;
+
+function renderUpdate() {
+  const btn = $('#update-btn');
+  btn.hidden = !update;
+  if (update) btn.textContent = `Atualizar para ${update.version}`;
+}
+
+/** As notas vêm do CHANGELOG em Markdown; aqui só tiramos a marcação. */
+function plainNotes(md) {
+  return md
+    .replace(/^#+\s*v?\d+\.\d+\.\d+\s*$/m, '') // o título da seção repete a versão
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^#+\s*/gm, '')
+    .trim();
+}
+
+function setUpdateStatus(text, error = false) {
+  const status = $('#update-status');
+  status.textContent = text;
+  status.classList.toggle('error', error);
+}
+
+function openUpdate() {
+  if (!update) return;
+  $('#update-title').textContent = `Medalha ${update.version}`;
+  $('#update-notes').textContent = plainNotes(update.notes) || 'Sem notas para esta versão.';
+  $('#update-go').textContent = update.method === 'manual' ? 'Abrir página da versão' : 'Atualizar agora';
+  $('#update-go').disabled = installing;
+  if (!installing) setUpdateStatus(UPDATE_HINTS[update.method] ?? '');
+  openModal($('#update'));
+}
+
+$('#update-btn').addEventListener('click', openUpdate);
+
+$('#update-go').addEventListener('click', async () => {
+  if (update.method === 'manual') {
+    invoke('open_release_page');
+    return;
+  }
+  installing = true;
+  $('#update-go').disabled = true;
+  setUpdateStatus('Baixando…');
+  try {
+    await invoke('install_update');
+    setUpdateStatus('Instalado. Abrindo a versão nova…');
+  } catch (e) {
+    installing = false;
+    $('#update-go').disabled = false;
+    setUpdateStatus(`Não deu para atualizar: ${e}`, true);
+  }
+});
+
+listen('update-progress', (e) => {
+  const { downloaded, total } = e.payload;
+  const mb = (n) => (n / 1e6).toFixed(0);
+  setUpdateStatus(`Baixando… ${Math.floor((downloaded / total) * 100)}% (${mb(downloaded)} de ${mb(total)} MB)`);
+});
+
+listen('update-available', (e) => {
+  update = e.payload;
+  renderUpdate();
+});
+
+$('#check-update').addEventListener('click', async () => {
+  const text = $('#update-check-text');
+  text.textContent = 'Procurando…';
+  try {
+    update = await invoke('check_update');
+    renderUpdate();
+    text.textContent = update ? `Versão ${update.version} disponível.` : 'Você está na versão mais nova.';
+  } catch (e) {
+    text.textContent = String(e);
+  }
+});
+
 // Eventos do Rust
 
 listen('recorder-status', (e) => {
@@ -674,6 +761,8 @@ listen('clips-changed', () => refreshSoon());
 (async () => {
   state.config = await invoke('get_config');
   state.status = await invoke('get_status');
+  update = await invoke('get_update');
+  renderUpdate();
   renderStatus();
   refreshClips();
   setTab('medal');

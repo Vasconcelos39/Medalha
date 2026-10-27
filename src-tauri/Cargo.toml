@@ -1,6 +1,6 @@
 [package]
 name = "medalha"
-version = "0.2.2"
+version = "0.3.0"
 description = "Cliente desktop não oficial do Medal com replay buffer para Linux e Windows"
 authors = ["Vasconcelos39"]
 license = "MIT"
@@ -22,6 +22,7 @@ serde_json = "1"
 chrono = "0.4"
 notify = "8"
 trash = "5"
+ureq = { version = "2", features = ["json"] }
 
 [target.'cfg(windows)'.dependencies]
 cpal = "0.15"

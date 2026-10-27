@@ -1,5 +1,17 @@
 # Mudanças
 
+## v0.3.0
+
+- Card "Clipe salvo" por cima do jogo, como o do Medal, com o nome do jogo e a duração. Não tira o foco do jogo. Também aparece quando um clipe não pôde ser salvo (por exemplo, com o buffer desligado).
+  - Windows e Linux X11: canto superior direito do monitor principal.
+  - Linux Wayland: via layer-shell, no KDE Plasma, Hyprland, Sway e outros compositores wlroots. O AppImage traz a biblioteca; no `.deb` ela vem como recomendação (`libgtk-layer-shell0`). No GNOME, que não tem o protocolo, o Medalha usa a notificação do sistema.
+- Aviso de versão nova: o botão "Atualizar para X" aparece no cabeçalho, com as notas da versão.
+  - AppImage: o arquivo é trocado pelo novo e o Medalha reabre sozinho.
+  - `.deb` e `.rpm`: o pacote é instalado pedindo a senha do sistema, e o Medalha reabre.
+  - Windows: o instalador abre depois que o Medalha fecha.
+  - Dá para desligar a busca ou procurar na hora em Configurações → Sistema.
+- Fechar a janela com "Fechar para a bandeja" desligado agora encerra o app de vez.
+
 ## v0.2.2
 
 Correções:

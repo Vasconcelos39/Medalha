@@ -50,6 +50,7 @@
       <span>Salvar clipe</span>
       <kbd id="hotkey-label">F8</kbd>
     </button>
+    <button class="ghost update-btn" id="update-btn" hidden></button>
     <button class="icon-btn" id="settings-btn" title="Configurações">
       <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
@@ -214,8 +215,12 @@
               <input name="gameInName" type="checkbox" class="switch">
             </label>
             <label class="row">
-              <span class="row-text">Notificação ao salvar</span>
+              <span class="row-text">Aviso ao salvar<small>Também avisa quando um clipe não pôde ser salvo.</small></span>
               <input name="notifyOnSave" type="checkbox" class="switch">
+            </label>
+            <label class="row">
+              <span class="row-text">Card por cima do jogo<small>Como o do Medal. Desligado, ou onde não funcionar, usa a notificação do sistema.</small></span>
+              <input name="overlayOnSave" type="checkbox" class="switch">
             </label>
             <label class="row">
               <span class="row-text">Som ao salvar</span>
@@ -239,6 +244,12 @@
               <span class="row-text">Fechar para a bandeja<small>O X esconde a janela e o buffer continua.</small></span>
               <input name="closeToTray" type="checkbox" class="switch">
             </label>
+            <!-- div, não label: com o botão dentro, clicar no texto acionaria o botão. -->
+            <div class="row">
+              <span class="row-text">Procurar atualizações<small id="update-check-text">Avisa quando sair uma versão nova.</small></span>
+              <button type="button" class="ghost" id="check-update">Procurar agora</button>
+              <input name="checkUpdates" type="checkbox" class="switch" aria-label="Procurar atualizações sozinho">
+            </div>
           </div>
         </section>
 
@@ -287,6 +298,24 @@
         <button value="save" class="primary">Salvar</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="update" class="modal update-modal">
+    <div class="modal-head">
+      <h2 id="update-title"></h2>
+      <div class="spacer"></div>
+      <button type="button" class="icon-btn" data-close title="Fechar">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="update-body">
+      <div class="notes" id="update-notes"></div>
+      <p class="update-status" id="update-status"></p>
+    </div>
+    <div class="actions">
+      <button type="button" class="ghost" data-close>Depois</button>
+      <button type="button" class="primary" id="update-go"></button>
+    </div>
   </dialog>
 
   <div id="toasts" class="toasts" aria-live="polite"></div>

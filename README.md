@@ -4,7 +4,9 @@ Cliente desktop não oficial do [Medal](https://medal.tv) para Linux e Windows, 
 
 Tem duas abas. A primeira é o medal.tv embutido, com login salvo. A segunda é a biblioteca dos clipes gravados no computador, com miniaturas, player, corte, filtro por jogo, renomear e lixeira.
 
-Os clipes saem de um replay buffer: o Medalha grava a tela continuamente e, quando você aperta o atalho (`F8` por padrão), salva os últimos segundos.
+Os clipes saem de um replay buffer: o Medalha grava a tela continuamente e, quando você aperta o atalho (`F8` por padrão), salva os últimos segundos. Um card no canto da tela confirma que o clipe foi salvo, sem tirar o foco do jogo. No Wayland o card precisa do protocolo layer-shell (KDE Plasma, Hyprland, Sway); no GNOME aparece uma notificação do sistema no lugar.
+
+Quando sai uma versão nova, o botão "Atualizar para X" aparece no cabeçalho. No AppImage, no `.deb`, no `.rpm` e no instalador do Windows a atualização é feita pelo próprio app.
 
 O Medalha não tem relação com a Medal.tv. O Medal não oferece API pública de upload e o site não aceita envio de vídeos pelo navegador, então os clipes ficam só na pasta local (`Vídeos/Medalha`).
 
@@ -75,7 +77,7 @@ cargo install tauri-cli --version "^2" --locked
 cargo tauri build
 ```
 
-A interface é HTML, CSS e JavaScript sem build, na pasta `ui/`. O código Rust fica em `src-tauri/src/`: `recorder/` cuida do replay buffer, `clips.rs` da biblioteca, `medal.rs` do webview do site e `main.rs` da janela, da bandeja e dos comandos.
+A interface é HTML, CSS e JavaScript sem build, na pasta `ui/`. O código Rust fica em `src-tauri/src/`: `recorder/` cuida do replay buffer, `clips.rs` da biblioteca, `medal.rs` do webview do site, `overlay.rs` do card por cima do jogo, `update.rs` das atualizações e `main.rs` da janela, da bandeja e dos comandos.
 
 ## Publicando uma versão
 

@@ -23,7 +23,11 @@ pub struct Config {
     pub start_on_launch: bool,
     pub close_to_tray: bool,
     pub notify_on_save: bool,
+    /// O aviso ao salvar aparece como card por cima do jogo (senão, notificação do sistema).
+    pub overlay_on_save: bool,
     pub sound_on_save: bool,
+    /// Procurar versão nova nas releases do GitHub.
+    pub check_updates: bool,
     /// Prefixo do arquivo com o nome da janela em foco (o jogo) ao salvar.
     pub game_in_name: bool,
     /// Abrir minimizado na bandeja quando o usuário entra no sistema.
@@ -51,7 +55,9 @@ impl Default for Config {
             start_on_launch: true,
             close_to_tray: true,
             notify_on_save: true,
+            overlay_on_save: true,
             sound_on_save: true,
+            check_updates: true,
             game_in_name: true,
             autostart: false,
             ffmpeg_path: String::new(),

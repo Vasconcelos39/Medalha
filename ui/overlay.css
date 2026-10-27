@@ -1,0 +1,25 @@
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: transparent;
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, Cantarell, "Noto Sans", sans-serif;
+  user-select: none;
+}
+
+.card {
+  box-sizing: border-box; height: 100%;
+  display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  background: rgba(22, 24, 28, .94); color: #e8e9ec;
+  border: 1px solid #2a2d34; border-left: 3px solid #46c47e; border-radius: 10px;
+  opacity: 0; transform: translateX(24px);
+  transition: opacity .18s ease-out, transform .18s ease-out;
+}
+.card.show { opacity: 1; transform: none; }
+.card.error { border-left-color: #e5484d; }
+
+.mark { width: 30px; height: 30px; flex: none; }
+.text { min-width: 0; }
+.title { font-size: 14px; font-weight: 600; }
+.subtitle {
+  margin-top: 2px; font-size: 12px; color: #a0a5ae;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}

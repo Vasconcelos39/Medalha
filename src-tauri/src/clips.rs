@@ -231,28 +231,57 @@ fn percent_encode(s: &str) -> String {
         .collect()
 }
 
-/// Depois de salvar: toca o som, gera a miniatura, avisa a UI e mostra notificação.
+/// Depois de salvar: toca o som, gera a miniatura, avisa a UI e mostra o aviso.
 pub fn on_clip_saved(app: &AppHandle, path: PathBuf) {
     let state = app.state::<AppState>();
-    let (ffmpeg_path, notify, beep) = {
+    let (ffmpeg_path, beep) = {
         let cfg = state.config.lock().unwrap();
-        (cfg.ffmpeg_path.clone(), cfg.notify_on_save, cfg.sound_on_save)
+        (cfg.ffmpeg_path.clone(), cfg.sound_on_save)
     };
     if beep {
         sound::play_saved(&state.cache_dir);
     }
     let ffmpeg = media::find_ffmpeg(&ffmpeg_path);
-    meta(ffmpeg.as_deref(), &state.cache_dir, &path);
+    let meta = meta(ffmpeg.as_deref(), &state.cache_dir, &path);
     let Some(clip) = info(&path) else { return };
-    if notify {
-        let _ = app
-            .notification()
-            .builder()
-            .title("Clipe salvo")
-            .body(&clip.name)
-            .show();
-    }
+    let title = clip_title(&clip.name);
+    let subtitle = match meta.duration {
+        Some(secs) => format!("{title} · {secs:.0} s"),
+        None => title,
+    };
+    alert(app, "Clipe salvo", &subtitle, "ok");
     let _ = app.emit("clip-saved", clip);
+}
+
+/// Aviso ao salvar (ou ao falhar): card por cima do jogo e, se não der, notificação
+/// do sistema. Chame fora da thread principal.
+pub fn alert(app: &AppHandle, title: &str, text: &str, kind: &str) {
+    let (enabled, overlay) = {
+        let state = app.state::<AppState>();
+        let cfg = state.config.lock().unwrap();
+        (cfg.notify_on_save, cfg.overlay_on_save)
+    };
+    if !enabled {
+        return;
+    }
+    let short: String = text.lines().next().unwrap_or_default().chars().take(90).collect();
+    if overlay && crate::overlay::show(app, title, &short, kind) {
+        return;
+    }
+    let _ = app.notification().builder().title(title).body(short).show();
+}
+
+/// `Elden Ring_2026-10-23_21-00-00` → `Elden Ring`; sem jogo no nome, "Replay".
+fn clip_title(stem: &str) -> String {
+    let mut parts = stem.rsplitn(3, '_');
+    let (time, date, prefix) = (parts.next(), parts.next(), parts.next());
+    let dated = date.is_some_and(|d| d.len() == 10 && d.as_bytes()[4] == b'-')
+        && time.is_some_and(|t| t.starts_with(|c: char| c.is_ascii_digit()));
+    match prefix {
+        Some("Medalha") if dated => "Replay".into(),
+        Some(game) if dated => game.into(),
+        _ => stem.into(),
+    }
 }
 
 /// Observa a pasta de clipes e avisa a UI quando algo muda.
@@ -267,4 +296,18 @@ pub fn watch(app: &AppHandle, dir: &Path) -> Option<notify::RecommendedWatcher> 
     .ok()?;
     watcher.watch(dir, notify::RecursiveMode::NonRecursive).ok()?;
     Some(watcher)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clip_title;
+
+    #[test]
+    fn titles() {
+        assert_eq!(clip_title("Elden Ring_2026-10-23_21-00-00"), "Elden Ring");
+        assert_eq!(clip_title("Medalha_2026-10-23_21-00-00"), "Replay");
+        assert_eq!(clip_title("Elden Ring_2026-10-23_21-00-00 (2)"), "Elden Ring");
+        assert_eq!(clip_title("meu clipe"), "meu clipe");
+        assert_eq!(clip_title("a_b_c"), "a_b_c");
+    }
 }

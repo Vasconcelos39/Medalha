@@ -240,6 +240,18 @@ input[type="number"] { width: 84px; }
 .diag dt { color: var(--faint); }
 .diag dd { margin: 0; color: var(--muted); word-break: break-all; font-family: ui-monospace, "Cascadia Mono", monospace; }
 
+/* Atualização */
+.update-btn { color: var(--accent); border-color: rgba(242, 179, 61, .4); }
+.update-modal { width: min(520px, 92vw); }
+.update-body { padding: 14px 18px 4px; }
+.notes {
+  max-height: 46vh; overflow: auto; white-space: pre-wrap; line-height: 1.5;
+  color: var(--muted); font-size: 13px;
+}
+.update-status { margin: 12px 0 6px; color: var(--text); font-size: 13px; }
+.update-status:empty { display: none; }
+.update-status.error { color: var(--rec); }
+
 /* Avisos */
 .toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 10; }
 .toast {
