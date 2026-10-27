@@ -1,6 +1,8 @@
 # Mudanças
 
-## v0.3.0
+## v0.3.1
+
+A v0.3.0 não chegou a ser publicada (a compilação no GitHub travou), então esta é a primeira versão com estas mudanças.
 
 - Card "Clipe salvo" por cima do jogo, como o do Medal, com o nome do jogo e a duração. Não tira o foco do jogo. Também aparece quando um clipe não pôde ser salvo (por exemplo, com o buffer desligado).
   - Windows e Linux X11: canto superior direito do monitor principal.

@@ -36,15 +36,27 @@ jobs:
       - name: Dependências do Linux
         if: runner.os == 'Linux'
         working-directory: .
-        timeout-minutes: 15
+        timeout-minutes: 30
         env:
           DEBIAN_FRONTEND: noninteractive
-        # O apt dos runners às vezes fica esperando a trava do unattended-upgrades.
+        # Normalmente leva menos de um minuto, mas de vez em quando o espelho da Azure
+        # fica lento por 15 minutos ou mais. Cada tentativa tem um limite e, se não der,
+        # a próxima usa o espelho da Canonical.
         run: |
-          sudo apt-get -o DPkg::Lock::Timeout=300 update
-          sudo apt-get -o DPkg::Lock::Timeout=300 install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf \
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav \
-            libgtk-layer-shell0
+          pkgs="libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+            libgtk-layer-shell0"
+          opts="-o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          for attempt in 1 2 3; do
+            if timeout 180 sudo apt-get $opts update && timeout 420 sudo apt-get $opts install -y $pkgs; then
+              exit 0
+            fi
+            echo "::warning::apt falhou ou passou do tempo na tentativa $attempt"
+            sudo dpkg --configure -a || true
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
+            if [ -f /etc/apt/apt-mirrors.txt ]; then sudo sed -i '/azure.archive.ubuntu.com/d' /etc/apt/apt-mirrors.txt; fi
+          done
+          exit 1
 
       - uses: dtolnay/rust-toolchain@stable
 
