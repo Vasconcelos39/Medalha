@@ -1,5 +1,13 @@
 # Mudanças
 
+## v0.3.2
+
+Proteções depois de um travamento do sistema num PC com Bazzite (KDE Plasma, Wayland) com o buffer ligado. A causa ainda está sendo investigada.
+
+- Linux: se o Medalha terminar de repente com o buffer ligado (o computador travou, faltou luz, o app foi morto), na próxima abertura o buffer não liga sozinho. Um aviso explica o motivo, e um clique em "Buffer desligado" liga do mesmo jeito. Desligar o computador ou sair da sessão normalmente não conta.
+- Novo arquivo `medalha.log` na pasta de cache, com o que o Medalha fez: buffer ligado e desligado, o comando do gpu-screen-recorder e as mensagens dele, clipes salvos, o card. Cada linha vai para o disco na hora, então sobrevive a um travamento. O caminho aparece em Configurações → Avançado.
+- `medalha --no-buffer` abre o app sem ligar o buffer, mesmo com "Ligar o buffer ao abrir" marcado.
+
 ## v0.3.1
 
 A v0.3.0 não chegou a ser publicada (a compilação no GitHub travou), então esta é a primeira versão com estas mudanças.

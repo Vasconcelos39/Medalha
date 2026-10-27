@@ -60,6 +60,13 @@ Outros comandos, que vão para a instância já aberta:
 | `medalha --start`, `medalha --stop` | liga, desliga |
 | `medalha --show` | mostra a janela |
 | `medalha --hidden` | abre minimizado na bandeja |
+| `medalha --no-buffer` | abre sem ligar o buffer |
+
+## Se algo der errado
+
+O Medalha registra o que faz em `medalha.log`, na pasta de cache (`~/.cache/io.github.vasconcelos39.medalha/` no Linux, `%LOCALAPPDATA%\io.github.vasconcelos39.medalha\` no Windows). O caminho exato aparece em Configurações → Avançado. Cada linha vai para o disco na hora, então o log continua lá mesmo se o computador travar.
+
+No Linux, se o Medalha terminar de repente com o buffer ligado, na próxima abertura o buffer não liga sozinho, para não repetir o problema. Para ligar, é só clicar no status no topo.
 
 ## Compilando
 

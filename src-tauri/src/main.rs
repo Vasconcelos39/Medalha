@@ -4,6 +4,8 @@ mod autostart;
 mod clips;
 mod config;
 mod game;
+mod guard;
+mod logfile;
 mod media;
 mod medal;
 mod overlay;
@@ -34,6 +36,11 @@ pub struct AppState {
 }
 
 type CmdResult<T> = Result<T, String>;
+
+const CRASH_NOTICE: &str = "Da última vez o Medalha terminou de repente com o buffer ligado (o computador \
+    travou ou o app foi fechado à força). Por segurança o buffer não ligou sozinho agora. Para ligar, clique \
+    em \"Buffer desligado\" no topo. Se o computador travar de novo, o arquivo medalha.log (caminho em \
+    Configurações → Avançado) mostra o que estava acontecendo.";
 
 fn state(app: &AppHandle) -> tauri::State<'_, AppState> {
     app.state::<AppState>()
@@ -254,12 +261,24 @@ struct Diagnostics {
     ffmpeg: Option<String>,
     gsr: Option<String>,
     backend: String,
+    log: String,
+}
+
+fn platform_label() -> String {
+    let desktop = std::env::var("XDG_CURRENT_DESKTOP").map(|d| format!(" · {d}")).unwrap_or_default();
+    format!(
+        "{} ({}){desktop}{}",
+        std::env::consts::OS,
+        util::session_kind(),
+        if std::env::var_os("APPIMAGE").is_some() { " · AppImage" } else { "" }
+    )
 }
 
 #[tauri::command]
 async fn diagnostics(app: AppHandle) -> CmdResult<Diagnostics> {
     let cfg = state(&app).config.lock().unwrap().clone();
     let version = app.package_info().version.to_string();
+    let log = logfile::path(&state(&app).cache_dir).display().to_string();
     blocking(move || {
         #[cfg(target_os = "linux")]
         let gsr = recorder::gsr::find().map(|g| g.describe());
@@ -267,15 +286,11 @@ async fn diagnostics(app: AppHandle) -> CmdResult<Diagnostics> {
         let gsr = None;
         Diagnostics {
             version,
-            platform: format!(
-                "{} ({}){}",
-                std::env::consts::OS,
-                util::session_kind(),
-                if std::env::var_os("APPIMAGE").is_some() { " · AppImage" } else { "" }
-            ),
+            platform: platform_label(),
             ffmpeg: media::find_ffmpeg(&cfg.ffmpeg_path).map(|p| p.display().to_string()),
             gsr,
             backend: recorder::backend_label(&cfg),
+            log,
         }
     })
     .await
@@ -467,7 +482,15 @@ fn main() {
             let config = Config::load(&config_path, default_clips);
             let _ = std::fs::create_dir_all(cache_dir.join("thumbs"));
             let _ = app.asset_protocol_scope().allow_directory(cache_dir.join("thumbs"), true);
-            let start_now = config.start_on_launch;
+            logfile::init(&cache_dir);
+            logfile::write(format!("Medalha {} aberto · {}", app.package_info().version, platform_label()));
+            let crashed_since = guard::init(&cache_dir);
+            if let Some(since) = &crashed_since {
+                logfile::write(format!("a última execução terminou de repente com o buffer ligado desde {since}"));
+            }
+            let skip_buffer = args.iter().any(|a| a == "--no-buffer");
+            let start_now = config.start_on_launch && crashed_since.is_none() && !skip_buffer;
+            let blocked_by_crash = config.start_on_launch && crashed_since.is_some() && !skip_buffer;
             if config.autostart {
                 // Reescreve o caminho do executável (mudou se o app foi reinstalado ou o AppImage movido).
                 std::thread::spawn(|| {
@@ -492,6 +515,8 @@ fn main() {
             build_tray(app)?;
             if start_now {
                 state(&handle).recorder.start(&handle);
+            } else if blocked_by_crash {
+                state(&handle).recorder.set_notice(&handle, CRASH_NOTICE);
             }
             handle_cli(&handle, &args, false);
             update::watch(&handle);

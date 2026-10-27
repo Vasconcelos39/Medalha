@@ -1,6 +1,6 @@
 [package]
 name = "medalha"
-version = "0.3.1"
+version = "0.3.2"
 description = "Cliente desktop não oficial do Medal com replay buffer para Linux e Windows"
 authors = ["Vasconcelos39"]
 license = "MIT"

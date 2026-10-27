@@ -148,6 +148,7 @@ impl GsrSession {
             args.extend(["-a", a].map(String::from));
         }
 
+        crate::logfile::write(format!("gsr: {} {}", gsr.program.display(), args.join(" ")));
         let mut child = command(&gsr.program)
             .args(&args)
             .stdin(Stdio::null())
@@ -155,7 +156,7 @@ impl GsrSession {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| format!("não consegui iniciar o gpu-screen-recorder: {e}"))?;
-        let stderr = tail_reader(child.stderr.take().expect("stderr"), 12);
+        let stderr = tail_reader(child.stderr.take().expect("stderr"), 12, Some("gsr"));
 
         // O gsr imprime o caminho de cada replay salvo no stdout.
         let stdout = child.stdout.take().expect("stdout");

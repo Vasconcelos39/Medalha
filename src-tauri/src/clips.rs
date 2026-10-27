@@ -233,6 +233,7 @@ fn percent_encode(s: &str) -> String {
 
 /// Depois de salvar: toca o som, gera a miniatura, avisa a UI e mostra o aviso.
 pub fn on_clip_saved(app: &AppHandle, path: PathBuf) {
+    crate::logfile::write(format!("clipe salvo: {}", path.display()));
     let state = app.state::<AppState>();
     let (ffmpeg_path, beep) = {
         let cfg = state.config.lock().unwrap();

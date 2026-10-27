@@ -111,7 +111,8 @@ pub struct Status {
     pub hotkey_ok: bool,
     /// Correção que a UI pode oferecer para o erro atual: "install-gsr".
     pub action: Option<String>,
-    /// Problema com o buffer ligado, por exemplo a máquina não dando conta do fps.
+    /// Problema com o buffer ligado, por exemplo a máquina não dando conta do fps,
+    /// ou o motivo de ele não ter ligado sozinho.
     pub warning: Option<String>,
 }
 
@@ -137,6 +138,7 @@ pub struct Recorder {
 
 pub fn emit_error(app: &AppHandle, message: impl Into<String>) {
     let message = message.into();
+    crate::logfile::write(format!("erro: {message}"));
     let _ = app.emit("clip-error", message.clone());
     // Quem aperta o atalho está no jogo e não vê a janela do Medalha.
     let app = app.clone();
@@ -206,6 +208,12 @@ impl Recorder {
         let _ = app.emit("recorder-status", self.status());
     }
 
+    /// Aviso com o buffer desligado; some quando ele liga.
+    pub fn set_notice(&self, app: &AppHandle, notice: &str) {
+        self.inner.lock().unwrap().status.warning = Some(notice.to_string());
+        self.emit(app);
+    }
+
     pub fn set_hotkey(&self, app: &AppHandle, hotkey: &str, ok: bool) {
         {
             let mut inner = self.inner.lock().unwrap();
@@ -267,6 +275,8 @@ impl Recorder {
             }
             match result {
                 Ok((session, backend, detail)) => {
+                    crate::logfile::write(format!("buffer ligado: {backend}, {detail}"));
+                    crate::guard::arm();
                     inner.session = Some(session);
                     inner.status.state = "recording".into();
                     inner.status.backend = Some(backend);
@@ -274,6 +284,8 @@ impl Recorder {
                     inner.status.since = Some(chrono::Utc::now().timestamp_millis());
                 }
                 Err(e) => {
+                    crate::logfile::write(format!("buffer não ligou: {e}"));
+                    crate::guard::disarm();
                     inner.status.state = "error".into();
                     inner.status.action = suggested_action(&e);
                     inner.status.error = Some(e);
@@ -377,6 +389,7 @@ impl Recorder {
                 continue;
             };
 
+            crate::logfile::write(format!("captura caiu: {err}"));
             let session = inner.session.take();
             let retry = inner.retries < MAX_RETRIES;
             let next = if retry {
@@ -387,6 +400,7 @@ impl Recorder {
                 inner.status.state = "error".into();
                 inner.status.error = Some(err);
                 inner.status.since = None;
+                crate::guard::disarm();
                 None
             };
             drop(inner);
@@ -415,6 +429,10 @@ impl Recorder {
             inner.status.since = None;
             inner.session.take()
         };
+        crate::guard::disarm();
+        if session.is_some() {
+            crate::logfile::write("buffer desligado");
+        }
         // Sem sessão não há o que esperar: um start em andamento se cancela sozinho
         // ao ver a geração nova (e o app não trava ao sair no meio de um probe).
         if let Some(s) = session {
@@ -444,6 +462,7 @@ impl Recorder {
     /// Volta na hora; o trabalho roda numa thread própria porque o atalho global e
     /// os comandos chegam pela thread da interface, e descobrir o jogo leva um instante.
     pub fn save(&self, app: &AppHandle) {
+        crate::logfile::write("salvar clipe");
         let app = app.clone();
         std::thread::spawn(move || recorder(&app).save_now(&app));
     }

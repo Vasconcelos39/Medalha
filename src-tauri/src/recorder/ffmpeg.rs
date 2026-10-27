@@ -46,7 +46,7 @@ impl FfmpegSession {
             .spawn()
             .map_err(|e| format!("não consegui iniciar o ffmpeg: {e}"))?;
         kill_with_parent(&child);
-        let stderr = tail_reader(child.stderr.take().expect("stderr"), 12);
+        let stderr = tail_reader(child.stderr.take().expect("stderr"), 12, None);
 
         #[cfg(windows)]
         let audio = child

@@ -288,9 +288,11 @@ pub fn session_kind() -> &'static str {
 }
 
 /// Últimas linhas de um stream de texto, para mensagens de erro.
+/// Com `log`, cada linha também vai para o `medalha.log` com esse prefixo.
 pub fn tail_reader(
     reader: impl Read + Send + 'static,
     keep: usize,
+    log: Option<&'static str>,
 ) -> std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<String>>> {
     use std::io::BufRead;
     let tail = std::sync::Arc::new(std::sync::Mutex::new(std::collections::VecDeque::new()));
@@ -300,6 +302,9 @@ pub fn tail_reader(
             let line = line.trim().to_string();
             if line.is_empty() {
                 continue;
+            }
+            if let Some(prefix) = log {
+                crate::logfile::write(format!("{prefix}: {line}"));
             }
             let mut t = t.lock().unwrap();
             t.push_back(line);

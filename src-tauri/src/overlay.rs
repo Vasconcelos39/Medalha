@@ -62,6 +62,7 @@ pub fn show(app: &AppHandle, title: &str, subtitle: &str, kind: &str) -> bool {
 }
 
 fn create(app: &AppHandle) -> Option<WebviewWindow> {
+    crate::logfile::write("card: criando a janela");
     let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("overlay.html".into()))
         .title("Medalha")
         .inner_size(WIDTH, HEIGHT)
@@ -84,9 +85,11 @@ fn create(app: &AppHandle) -> Option<WebviewWindow> {
     let _ = window.set_ignore_cursor_events(true);
     #[cfg(target_os = "linux")]
     if crate::util::is_wayland() && !layer::attach(app, &window) {
+        crate::logfile::write("card: layer-shell falhou, usando a notificação");
         let _ = window.destroy();
         return None;
     }
+    crate::logfile::write("card: janela pronta");
     Some(window)
 }
 

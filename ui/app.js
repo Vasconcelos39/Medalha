@@ -144,7 +144,7 @@ function renderStatus() {
       `Não foi possível registrar o atalho global "${s.hotkey}". No Wayland, crie um atalho no seu ` +
       `ambiente (GNOME/KDE) que rode:  medalha --save-clip`;
     banner.hidden = false;
-  } else if (s.state === 'recording' && s.warning) {
+  } else if (s.warning) {
     banner.textContent = s.warning;
     banner.hidden = false;
   } else {
@@ -615,6 +615,7 @@ async function renderDiagnostics() {
       ['gpu-screen-recorder', d.gsr ?? (IS_WINDOWS ? 'n/a' : 'não encontrado')],
       ['Gravador (automático)', d.backend],
       ['Pipeline ativo', state.status?.detail ?? '—'],
+      ['Log', d.log],
     ];
     dl.replaceChildren(...rows.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]));
     if (d.platform.includes('wayland')) {
